@@ -87,12 +87,17 @@ async def health_check():
 
 
 if __name__ == "__main__":
+    import os
+
+    # 从环境变量获取端口（Render 会设置 PORT 环境变量）
+    port = int(os.environ.get("PORT", 8002))
+
     print("=" * 70)
     print("🚀 Pet Motion Lab - 后端服务器 v2.0 (仅可灵AI)")
     print("=" * 70)
     print()
-    print("📚 API 文档: http://localhost:8002/docs")
-    print("🏥 健康检查: http://localhost:8002/health")
+    print(f"📚 API 文档: http://localhost:{port}/docs")
+    print(f"🏥 健康检查: http://localhost:{port}/health")
     print()
     print("🎨 可灵AI生成接口:")
     print("  - 生成动画: POST /api/kling/generate")
@@ -115,7 +120,7 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8002,
+        port=port,
         log_level="info"
     )
 
