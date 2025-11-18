@@ -9,6 +9,8 @@ from pathlib import Path
 import uuid
 import shutil
 import sys
+import tempfile
+import os
 
 # 添加项目根目录到路径
 sys.path.append(str(Path(__file__).parent.parent))
@@ -23,12 +25,12 @@ except ImportError:
 
 router = APIRouter(prefix="/api/background", tags=["background"])
 
-# 临时文件目录
-TEMP_DIR = Path("temp")
-TEMP_DIR.mkdir(exist_ok=True)
+# 使用系统临时目录（Render 兼容）
+TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab"
+TEMP_DIR.mkdir(exist_ok=True, parents=True)
 
-OUTPUT_DIR = Path("output")
-OUTPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR = TEMP_DIR / "output"
+OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
 
 
 @router.post("/remove")

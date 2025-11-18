@@ -11,6 +11,7 @@ import os
 import shutil
 from pathlib import Path
 import time
+import tempfile
 
 from pipeline_kling import KlingPipeline
 from utils.video_utils import extract_first_frame, extract_last_frame
@@ -22,8 +23,11 @@ router = APIRouter(prefix="/api/kling", tags=["kling"])
 ACCESS_KEY = KLING_ACCESS_KEY
 SECRET_KEY = KLING_SECRET_KEY
 
-# 临时上传目录
-UPLOAD_DIR = Path("output/uploads")
+# 使用系统临时目录（Render 兼容）
+TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab"
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+UPLOAD_DIR = TEMP_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 

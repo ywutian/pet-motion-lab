@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import time
 import base64
+import tempfile
 
 from kling_api_helper import KlingAPI
 from config import KLING_ACCESS_KEY, KLING_SECRET_KEY
@@ -19,9 +20,12 @@ router = APIRouter(prefix="/api/kling/tools", tags=["kling-tools"])
 ACCESS_KEY = KLING_ACCESS_KEY
 SECRET_KEY = KLING_SECRET_KEY
 
-# 临时目录
-UPLOAD_DIR = Path("output/uploads")
-OUTPUT_DIR = Path("output/kling_tools")
+# 使用系统临时目录（Render 兼容）
+TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab"
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+UPLOAD_DIR = TEMP_DIR / "uploads"
+OUTPUT_DIR = TEMP_DIR / "kling_tools"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
