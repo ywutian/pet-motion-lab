@@ -32,7 +32,7 @@ jobs:
         run: flutter pub get
       
       - name: Build web
-        run: flutter build web --release --dart-define=API_BASE_URL=https://pet-motion-lab.onrender.com
+        run: flutter build web --release --base-href /pet-motion-lab/ --dart-define=API_BASE_URL=https://pet-motion-lab.onrender.com
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
