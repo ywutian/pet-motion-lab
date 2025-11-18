@@ -6,9 +6,8 @@ services:
     region: oregon
     plan: free
     branch: main
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main_kling_only.py
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && python main_kling_only.py
     envVars:
       - key: KLING_ACCESS_KEY
         sync: false
