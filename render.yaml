@@ -1,0 +1,43 @@
+services:
+  # 后端 API 服务
+  - type: web
+    name: pet-motion-lab-api
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main_kling_only.py
+    envVars:
+      - key: KLING_ACCESS_KEY
+        sync: false
+      - key: KLING_SECRET_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    healthCheckPath: /health
+    
+  # Flutter Web 静态网站
+  - type: web
+    name: pet-motion-lab-web
+    runtime: static
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: |
+      flutter pub get
+      flutter build web --release --web-renderer canvaskit
+    staticPublishPath: ./build/web
+    envVars:
+      - key: API_BASE_URL
+        value: https://pet-motion-lab-api.onrender.com
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 模型文件（太大，不需要部署）
+models/
+*.pth
+*.bin
+*.safetensors
+
+# 输出文件
+output/
+temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试
+test/
+tests/
+*.test.py
+
+# 文档
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# 其他
+.DS_Store
+*.log
+

@@ -1,0 +1,2 @@
+# Prompt configuration module
+

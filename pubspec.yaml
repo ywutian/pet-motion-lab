@@ -1,0 +1,49 @@
+name: pet_motion_lab
+description: 宠物AI动作生成与裁剪测试平台
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  cupertino_icons: ^1.0.2
+  provider: ^6.1.1
+  image_picker: ^1.0.7
+  file_picker: ^8.1.6
+  image: ^4.1.7
+  path_provider: ^2.1.2
+  shared_preferences: ^2.2.2
+  http: ^1.2.0
+  gal: ^2.3.0
+  permission_handler: ^11.0.1
+  dio: ^5.4.0
+  uuid: ^4.3.3
+  crypto: ^3.0.3
+  intl: ^0.19.0
+  fl_chart: ^0.66.2
+  cached_network_image: ^3.3.1
+  video_player: ^2.8.2
+  archive: ^3.4.10
+  path: ^1.8.3
+  flutter_colorpicker: ^1.0.3
+  dotted_border: ^2.1.0
+  shimmer: ^3.0.0
+  animate_do: ^3.3.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/models/
+

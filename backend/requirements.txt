@@ -1,0 +1,41 @@
+# ============================================
+# 最佳模型方案依赖（Flux.1-dev）
+# ============================================
+
+# 核心依赖
+torch>=2.1.0
+torchvision>=0.16.0
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.30.0
+safetensors>=0.4.0
+
+# Flux 专用
+optimum-quanto>=0.2.0
+sentencepiece>=0.2.0
+
+# 图像处理
+pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# ControlNet 辅助
+controlnet-aux>=0.0.7
+mediapipe>=0.10.0
+
+# API 框架
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# 工具
+pydantic>=2.5.0
+requests>=2.31.0
+tqdm>=4.66.0
+huggingface-hub>=0.20.0
+
+# 可灵AI Pipeline 专用
+rembg>=2.0.50
+pyjwt>=2.8.0
+
