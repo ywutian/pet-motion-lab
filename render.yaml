@@ -6,8 +6,8 @@ services:
     region: oregon
     plan: free
     branch: main
-    buildCommand: cd backend && pip install -r requirements.txt
-    startCommand: cd backend && python main_kling_only.py
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/main_kling_only.py
     envVars:
       - key: KLING_ACCESS_KEY
         sync: false
@@ -16,7 +16,9 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: PYTHONUNBUFFERED
-        value: 1
+        value: "1"
+      - key: PYTHONPATH
+        value: /opt/render/project/src/backend
     healthCheckPath: /health
     
   # Flutter Web 静态网站
