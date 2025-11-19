@@ -20,6 +20,17 @@ class KlingAPI:
         self.secret_key = secret_key
         self.base_url = "https://api-beijing.klingai.com"
 
+        # 调试信息
+        if not self.access_key:
+            print("❌ 错误: access_key 为空！")
+        else:
+            print(f"✅ access_key 已设置: {self.access_key[:10]}...")
+
+        if not self.secret_key:
+            print("❌ 错误: secret_key 为空！")
+        else:
+            print(f"✅ secret_key 已设置: {self.secret_key[:10]}...")
+
     def _encode_jwt_token(self) -> str:
         """生成JWT Token（遵循可灵AI官方文档）"""
         headers = {
@@ -31,6 +42,12 @@ class KlingAPI:
             "exp": int(time.time()) + 1800,  # 有效时间：当前时间+1800s(30min)
             "nbf": int(time.time()) - 5  # 开始生效的时间：当前时间-5秒
         }
+
+        # 调试信息
+        print(f"🔐 生成JWT Token:")
+        print(f"   iss (access_key): {self.access_key[:10] if self.access_key else 'EMPTY'}...")
+        print(f"   secret_key: {self.secret_key[:10] if self.secret_key else 'EMPTY'}...")
+
         token = jwt.encode(payload, self.secret_key, headers=headers)
         return token
 
@@ -188,19 +205,30 @@ class KlingAPI:
             "image_count": image_count,
         }
 
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        # 添加重试机制
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=60)
 
-        if response.status_code == 200:
-            data = response.json()
-            # 提取task_id
-            if 'data' in data and 'task_id' in data['data']:
-                return {'task_id': data['data']['task_id']}
-            elif 'task_id' in data:
-                return {'task_id': data['task_id']}
-            else:
-                raise Exception(f"响应中未找到task_id: {data}")
-        else:
-            raise Exception(f"API请求失败: {response.status_code} - {response.text}")
+                if response.status_code == 200:
+                    data = response.json()
+                    # 提取task_id
+                    if 'data' in data and 'task_id' in data['data']:
+                        return {'task_id': data['data']['task_id']}
+                    elif 'task_id' in data:
+                        return {'task_id': data['task_id']}
+                    else:
+                        raise Exception(f"响应中未找到task_id: {data}")
+                else:
+                    raise Exception(f"API请求失败: {response.status_code} - {response.text}")
+            except (requests.exceptions.ConnectionError, ConnectionResetError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # 2秒, 4秒, 6秒
+                    print(f"  ⚠️ 连接失败，{wait_time}秒后重试 (尝试 {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    raise Exception(f"连接失败，已重试{max_retries}次: {e}")
 
     def image_to_video(
         self,
@@ -247,19 +275,30 @@ class KlingAPI:
             "aspect_ratio": aspect_ratio,
         }
 
-        # 增加超时时间到120秒，因为视频生成需要较长时间
-        video_response = requests.post(video_url, headers=headers, json=payload, timeout=120)
+        # 添加重试机制
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # 增加超时时间到120秒，因为视频生成需要较长时间
+                video_response = requests.post(video_url, headers=headers, json=payload, timeout=120)
 
-        if video_response.status_code == 200:
-            data = video_response.json()
-            if 'data' in data and 'task_id' in data['data']:
-                return {'task_id': data['data']['task_id']}
-            elif 'task_id' in data:
-                return {'task_id': data['task_id']}
-            else:
-                raise Exception(f"响应中未找到task_id: {data}")
-        else:
-            raise Exception(f"创建视频任务失败: {video_response.status_code} - {video_response.text}")
+                if video_response.status_code == 200:
+                    data = video_response.json()
+                    if 'data' in data and 'task_id' in data['data']:
+                        return {'task_id': data['data']['task_id']}
+                    elif 'task_id' in data:
+                        return {'task_id': data['task_id']}
+                    else:
+                        raise Exception(f"响应中未找到task_id: {data}")
+                else:
+                    raise Exception(f"创建视频任务失败: {video_response.status_code} - {video_response.text}")
+            except (requests.exceptions.ConnectionError, ConnectionResetError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # 2秒, 4秒, 6秒
+                    print(f"  ⚠️ 连接失败，{wait_time}秒后重试 (尝试 {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    raise Exception(f"连接失败，已重试{max_retries}次: {e}")
 
     def query_video_task(self, task_id: str) -> dict:
         """
