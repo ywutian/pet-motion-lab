@@ -6,37 +6,37 @@
 
 # 基础姿势提示词（图生图 - 生成第一张基准图）
 BASE_POSE_PROMPTS = {
-    "sit": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，坐姿，镜头面对{species}的正前方。",
-    "walk": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，往前走，镜头面对{species}的正前方。",
-    "sleep": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
-    "rest": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，趴下但是睁着眼睛，镜头面对{species}的正前方。",
+    "sit": "卡通3D{breed}{color}{species}，纯白色背景，坐姿，镜头面对{species}的正前方。",
+    "walk": "卡通3D{breed}{color}{species}，纯白色背景，往前走，镜头面对{species}的正前方。",
+    "sleep": "卡通3D{breed}{color}{species}，纯白色背景，睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
+    "rest": "卡通3D{breed}{color}{species}，纯白色背景，趴下但是睁着眼睛，镜头面对{species}的正前方。",
 }
 
 # 过渡视频提示词（图生视频）
 TRANSITION_PROMPTS = {
     # 步骤4：首批3个过渡视频
-    "sit2walk": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物起立，然后往前走，镜头面对{species}的正前方。",
-    "sit2rest": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物趴下，然后休息（趴下但是睁着眼睛），镜头面对{species}的正前方。",
-    "rest2sleep": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物闭眼睡觉，在打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
-    
+    "sit2walk": "卡通3D{breed}{color}{species}，纯白色背景，宠物起立，然后往前走，镜头面对{species}的正前方。",
+    "sit2rest": "卡通3D{breed}{color}{species}，纯白色背景，宠物趴下，然后休息（趴下但是睁着眼睛），镜头面对{species}的正前方。",
+    "rest2sleep": "卡通3D{breed}{color}{species}，纯白色背景，宠物闭眼睡觉，在打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
+
     # 步骤5：剩余9个过渡视频
-    "sit2sleep": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物趴下，然后睡觉，镜头面对{species}的正前方。",
-    "walk2sit": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物往前走，然后坐下，镜头面对{species}的正前方。",
-    "walk2sleep": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物往前走，然后睡觉，镜头面对{species}的正前方。",
-    "walk2rest": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物往前走，然后休息，镜头面对{species}的正前方。",
-    "sleep2walk": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物睁眼，然后起立，往前走，镜头面对{species}的正前方。",
-    "sleep2rest": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物睁眼，四处张望，镜头面对{species}的正前方。",
-    "sleep2sit": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物睁眼，然后坐起来，镜头面对{species}的正前方。",
-    "rest2sit": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物起立，然后坐下，镜头面对{species}的正前方。",
-    "rest2walk": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，宠物起立，然后往前走，镜头面对{species}的正前方。",
+    "sit2sleep": "卡通3D{breed}{color}{species}，纯白色背景，宠物趴下，然后睡觉，镜头面对{species}的正前方。",
+    "walk2sit": "卡通3D{breed}{color}{species}，纯白色背景，宠物往前走，然后坐下，镜头面对{species}的正前方。",
+    "walk2sleep": "卡通3D{breed}{color}{species}，纯白色背景，宠物往前走，然后睡觉，镜头面对{species}的正前方。",
+    "walk2rest": "卡通3D{breed}{color}{species}，纯白色背景，宠物往前走，然后休息，镜头面对{species}的正前方。",
+    "sleep2walk": "卡通3D{breed}{color}{species}，纯白色背景，宠物睁眼，然后起立，往前走，镜头面对{species}的正前方。",
+    "sleep2rest": "卡通3D{breed}{color}{species}，纯白色背景，宠物睁眼，四处张望，镜头面对{species}的正前方。",
+    "sleep2sit": "卡通3D{breed}{color}{species}，纯白色背景，宠物睁眼，然后坐起来，镜头面对{species}的正前方。",
+    "rest2sit": "卡通3D{breed}{color}{species}，纯白色背景，宠物起立，然后坐下，镜头面对{species}的正前方。",
+    "rest2walk": "卡通3D{breed}{color}{species}，纯白色背景，宠物起立，然后往前走，镜头面对{species}的正前方。",
 }
 
 # 循环视频提示词（图生视频 - 首尾帧相同）
 LOOP_PROMPTS = {
-    "sit": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，坐着，镜头面对{species}的正前方。",
-    "walk": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，往前走，镜头面对{species}的正前方。",
-    "rest": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，趴下但是睁着眼睛，镜头面对{species}的正前方。",
-    "sleep": "卡通3D{breed}{color}{species}，背景是纯白色0x000000，睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
+    "sit": "卡通3D{breed}{color}{species}，纯白色背景，坐着，镜头面对{species}的正前方。",
+    "walk": "卡通3D{breed}{color}{species}，纯白色背景，往前走，镜头面对{species}的正前方。",
+    "rest": "卡通3D{breed}{color}{species}，纯白色背景，趴下但是睁着眼睛，镜头面对{species}的正前方。",
+    "sleep": "卡通3D{breed}{color}{species}，纯白色背景，睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。",
 }
 
 # 步骤4的3个过渡视频（用于生成其他3个基准图）
