@@ -13,6 +13,8 @@ services:
         sync: false
       - key: KLING_SECRET_KEY
         sync: false
+      - key: REMOVE_BG_API_KEY
+        sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: PYTHONUNBUFFERED

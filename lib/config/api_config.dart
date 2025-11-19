@@ -16,7 +16,12 @@ class ApiConfig {
       return _envApiUrl;
     }
 
-    // 2. 本地开发环境
+    // 2. 生产环境：使用已部署的后端
+    if (!kDebugMode) {
+      return 'https://pet-motion-lab-api.onrender.com';
+    }
+
+    // 3. 本地开发环境
     if (kIsWeb) {
       // Web 开发环境：使用 localhost
       return 'http://localhost:8002';

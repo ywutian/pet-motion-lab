@@ -9,37 +9,52 @@ from PIL import Image
 import numpy as np
 
 
-def remove_background(input_path: str, output_path: str) -> str:
+def remove_background(input_path: str, output_path: str, api_key: str = None) -> str:
     """
-    去除图片背景，生成透明PNG
-    
+    去除图片背景，生成透明PNG（使用 Remove.bg API）
+
     Args:
         input_path: 输入图片路径
         output_path: 输出PNG路径
-    
+        api_key: Remove.bg API Key（可选，从环境变量读取）
+
     Returns:
         输出文件路径
     """
-    try:
-        from rembg import remove
-    except ImportError:
-        raise ImportError("请先安装rembg: pip install rembg")
-    
+    import requests
+
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"输入文件不存在: {input_path}")
-    
+
+    # 获取 API Key
+    if api_key is None:
+        api_key = os.getenv("REMOVE_BG_API_KEY", "u7do7iuW3gtQjSg2Qx93RiWH")
+
+    if not api_key or api_key == "your_api_key_here":
+        raise ValueError("Remove.bg API Key 未配置。请设置 REMOVE_BG_API_KEY 环境变量")
+
     # 读取图片
     with open(input_path, 'rb') as f:
         input_data = f.read()
-    
-    # 去背景
-    output_data = remove(input_data)
-    
+
+    # 调用 Remove.bg API
+    response = requests.post(
+        'https://api.remove.bg/v1.0/removebg',
+        files={'image_file': input_data},
+        data={'size': 'auto'},
+        headers={'X-Api-Key': api_key},
+        timeout=30
+    )
+
+    if response.status_code != 200:
+        error_msg = response.json() if response.headers.get('content-type') == 'application/json' else response.text
+        raise Exception(f"Remove.bg API 错误: {response.status_code} - {error_msg}")
+
     # 保存
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, 'wb') as f:
-        f.write(output_data)
-    
+        f.write(response.content)
+
     print(f"✅ 去背景完成: {output_path}")
     return output_path
 
