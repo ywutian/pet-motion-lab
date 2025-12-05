@@ -18,6 +18,8 @@ class _StepInitScreenState extends State<StepInitScreen> {
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _breedController = TextEditingController();
   final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _weightController = TextEditingController();
+  final TextEditingController _birthdayController = TextEditingController();
   String _species = '猫';
   bool _isInitializing = false;
 
@@ -29,6 +31,8 @@ class _StepInitScreenState extends State<StepInitScreen> {
       final settings = Provider.of<SettingsProvider>(context, listen: false);
       _breedController.text = settings.lastPetBreed.isEmpty ? '布偶猫' : settings.lastPetBreed;
       _colorController.text = settings.lastPetColor.isEmpty ? '蓝色' : settings.lastPetColor;
+      _weightController.text = settings.lastPetWeight;
+      _birthdayController.text = settings.lastPetBirthday;
       setState(() {
         _species = settings.lastPetSpecies.isEmpty ? '猫' : settings.lastPetSpecies;
       });
@@ -270,6 +274,41 @@ class _StepInitScreenState extends State<StepInitScreen> {
                       }
                     },
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _weightController,
+              decoration: const InputDecoration(
+                labelText: '重量（可选）',
+                hintText: '例如：5kg',
+                border: OutlineInputBorder(),
+              ),
+              enabled: !_isInitializing,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _birthdayController,
+              decoration: const InputDecoration(
+                labelText: '生日（可选）',
+                hintText: '例如：2020-01-01',
+                border: OutlineInputBorder(),
+              ),
+              enabled: !_isInitializing,
+              onTap: () async {
+                if (_isInitializing) return;
+                final DateTime? picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) {
+                  setState(() {
+                    _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                  });
+                }
+              },
+              readOnly: true,
+            ),
           ],
         ),
       ),
@@ -280,6 +319,8 @@ class _StepInitScreenState extends State<StepInitScreen> {
   void dispose() {
     _breedController.dispose();
     _colorController.dispose();
+    _weightController.dispose();
+    _birthdayController.dispose();
     super.dispose();
   }
 }

@@ -237,10 +237,11 @@ class KlingAPI:
         negative_prompt: str = "",
         duration: int = 5,
         aspect_ratio: str = "16:9",
-        model_name: str = "kling-v2-1",
+        model_name: str = "kling-v2-1-master",
+        mode: str = "pro",
     ) -> dict:
         """
-        图生视频API（使用base64编码，kling-v2-1模型）
+        图生视频API（使用base64编码，kling-v2-1-master大师版模型）
 
         Args:
             image_path: 输入图片路径
@@ -248,7 +249,8 @@ class KlingAPI:
             negative_prompt: 负向提示词
             duration: 视频时长（秒）
             aspect_ratio: 宽高比
-            model_name: 模型名称，默认 "kling-v2-1"
+            model_name: 模型名称，默认 "kling-v2-1-master" (大师版，最高质量)
+            mode: 生成模式，"std" 标准模式(720p) 或 "pro" 专业模式(1080p)，默认 "pro"
 
         Returns:
             包含task_id的字典
@@ -260,7 +262,7 @@ class KlingAPI:
             image_base64 = base64.b64encode(image_data).decode('utf-8')
 
         print(f"  📤 图片已编码为base64，大小: {len(image_base64)} 字符")
-        print(f"  🎬 使用模型: {model_name}")
+        print(f"  🎬 使用模型: {model_name} (模式: {mode})")
 
         # 创建视频生成任务
         video_url = f"{self.base_url}/v1/videos/image2video"
@@ -268,6 +270,7 @@ class KlingAPI:
 
         payload = {
             "model_name": model_name,
+            "mode": mode,
             "image": image_base64,
             "prompt": prompt,
             "negative_prompt": negative_prompt,

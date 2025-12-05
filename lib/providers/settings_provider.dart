@@ -14,6 +14,8 @@ class SettingsProvider with ChangeNotifier {
   String _lastPetBreed = '';
   String _lastPetColor = '';
   String _lastPetSpecies = '';
+  String _lastPetWeight = '';  // 重量（如：5kg）
+  String _lastPetBirthday = '';  // 生日（如：2020-01-01）
 
   // 背景去除
   bool _autoCut = true;
@@ -31,6 +33,8 @@ class SettingsProvider with ChangeNotifier {
   String get lastPetBreed => _lastPetBreed;
   String get lastPetColor => _lastPetColor;
   String get lastPetSpecies => _lastPetSpecies;
+  String get lastPetWeight => _lastPetWeight;
+  String get lastPetBirthday => _lastPetBirthday;
   bool get autoCut => _autoCut;
   String get defaultResolution => _defaultResolution;
   int get defaultDuration => _defaultDuration;
@@ -49,6 +53,8 @@ class SettingsProvider with ChangeNotifier {
     _lastPetBreed = prefs.getString('last_pet_breed') ?? '';
     _lastPetColor = prefs.getString('last_pet_color') ?? '';
     _lastPetSpecies = prefs.getString('last_pet_species') ?? '';
+    _lastPetWeight = prefs.getString('last_pet_weight') ?? '';
+    _lastPetBirthday = prefs.getString('last_pet_birthday') ?? '';
     _autoCut = prefs.getBool('auto_cut') ?? true;
     _defaultResolution = prefs.getString('default_resolution') ?? '1080x1080';
     _defaultDuration = prefs.getInt('default_duration') ?? 5;
@@ -70,14 +76,18 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> savePetInfo(String breed, String color, String species) async {
+  Future<void> savePetInfo(String breed, String color, String species, {String? weight, String? birthday}) async {
     _lastPetBreed = breed;
     _lastPetColor = color;
     _lastPetSpecies = species;
+    if (weight != null) _lastPetWeight = weight;
+    if (birthday != null) _lastPetBirthday = birthday;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_pet_breed', breed);
     await prefs.setString('last_pet_color', color);
     await prefs.setString('last_pet_species', species);
+    if (weight != null) await prefs.setString('last_pet_weight', weight);
+    if (birthday != null) await prefs.setString('last_pet_birthday', birthday);
     notifyListeners();
   }
 

@@ -267,3 +267,94 @@ def trim_video(
 
     return output_path
 
+
+def concatenate_videos(
+    video_paths: list,
+    output_path: str,
+    resize_to_first: bool = True
+) -> str:
+    """
+    拼接多个视频文件
+    
+    Args:
+        video_paths: 视频文件路径列表（按顺序）
+        output_path: 输出视频路径
+        resize_to_first: 是否将所有视频调整为第一个视频的尺寸（默认True）
+    
+    Returns:
+        输出视频路径
+    """
+    if not video_paths:
+        raise ValueError("视频路径列表不能为空")
+    
+    # 检查所有视频文件是否存在
+    for video_path in video_paths:
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"视频文件不存在: {video_path}")
+    
+    # 获取第一个视频的信息作为参考
+    first_cap = cv2.VideoCapture(video_paths[0])
+    if not first_cap.isOpened():
+        raise Exception(f"无法打开第一个视频: {video_paths[0]}")
+    
+    fps = first_cap.get(cv2.CAP_PROP_FPS)
+    width = int(first_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(first_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    first_cap.release()
+    
+    # 创建输出目录
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    # 创建视频写入器
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not out.isOpened():
+        raise Exception(f"无法创建输出视频文件: {output_path}")
+    
+    total_frames = 0
+    
+    # 逐个处理每个视频
+    for i, video_path in enumerate(video_paths):
+        print(f"📹 处理视频 {i+1}/{len(video_paths)}: {Path(video_path).name}")
+        
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"⚠️  警告: 无法打开视频 {video_path}，跳过")
+            cap.release()
+            continue
+        
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
+        video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        print(f"   尺寸: {video_width}x{video_height}, FPS: {video_fps:.2f}, 帧数: {video_frames}")
+        
+        frame_count = 0
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # 如果需要调整尺寸
+            if resize_to_first and (video_width != width or video_height != height):
+                frame = cv2.resize(frame, (width, height))
+            
+            out.write(frame)
+            frame_count += 1
+            total_frames += 1
+        
+        cap.release()
+        print(f"   ✅ 已写入 {frame_count} 帧")
+    
+    out.release()
+    
+    print(f"\n✅ 视频拼接完成: {output_path}")
+    print(f"   总视频数: {len(video_paths)}")
+    print(f"   总帧数: {total_frames}")
+    print(f"   输出尺寸: {width}x{height}, FPS: {fps:.2f}")
+    
+    return output_path
+

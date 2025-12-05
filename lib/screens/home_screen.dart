@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'kling_generation_screen.dart';
-import 'tool_history_screen.dart';
+import 'kling_history_screen.dart';
 import 'settings_screen.dart';
 import 'tools_screen.dart';
 
@@ -17,7 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = const [
     KlingGenerationScreen(key: PageStorageKey('kling_screen')),
     ToolsScreen(key: PageStorageKey('tools_screen')),
-    ToolHistoryScreen(key: PageStorageKey('tool_history_screen')),
+    KlingHistoryScreen(key: PageStorageKey('kling_history_screen')),
     SettingsScreen(key: PageStorageKey('settings_screen')),
   ];
 

@@ -1,19 +1,22 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
+import '../models/cross_platform_file.dart';
 
 class KlingGenerationService {
   // 使用统一的 API 配置
   static String get baseUrl => ApiConfig.baseUrl;
 
-  /// 开始生成任务
+  /// 开始生成任务（跨平台版本）
   Future<String> startGeneration({
-    required File imageFile,
+    required CrossPlatformFile imageFile,
     required String breed,
     required String color,
     required String species,
+    String? weight,
+    String? birthday,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/kling/generate');
@@ -23,7 +26,27 @@ class KlingGenerationService {
       request.fields['breed'] = breed;
       request.fields['color'] = color;
       request.fields['species'] = species;
-      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      if (weight != null && weight.isNotEmpty) {
+        request.fields['weight'] = weight;
+      }
+      if (birthday != null && birthday.isNotEmpty) {
+        request.fields['birthday'] = birthday;
+      }
+
+      // 跨平台文件上传
+      if (imageFile.bytes != null) {
+        // Web或bytes模式
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          imageFile.bytes!,
+          filename: imageFile.name,
+        ));
+      } else if (imageFile.path != null && !kIsWeb) {
+        // 原生平台路径模式
+        request.files.add(await http.MultipartFile.fromPath('file', imageFile.path!));
+      } else {
+        throw Exception('无效的文件数据');
+      }
 
       print('📤 发送请求...');
       final response = await request.send();
@@ -43,6 +66,29 @@ class KlingGenerationService {
       print('❌ 连接错误: $e');
       rethrow;
     }
+  }
+
+  /// 开始生成任务（使用bytes，Web兼容）
+  Future<String> startGenerationWithBytes({
+    required Uint8List imageBytes,
+    required String fileName,
+    required String breed,
+    required String color,
+    required String species,
+    String? weight,
+    String? birthday,
+  }) async {
+    return startGeneration(
+      imageFile: CrossPlatformFile(
+        name: fileName,
+        bytes: imageBytes,
+      ),
+      breed: breed,
+      color: color,
+      species: species,
+      weight: weight,
+      birthday: birthday,
+    );
   }
 
   /// 查询生成状态
@@ -107,6 +153,111 @@ class KlingGenerationService {
   Future<void> deleteTask(String petId) async {
     final uri = Uri.parse('$baseUrl/api/kling/task/$petId');
     await http.delete(uri);
+  }
+
+  /// 获取历史记录列表
+  Future<Map<String, dynamic>> getHistory({
+    int page = 1,
+    int pageSize = 10,
+    String statusFilter = '',
+  }) async {
+    try {
+      var queryParams = '?page=$page&page_size=$pageSize';
+      if (statusFilter.isNotEmpty) {
+        queryParams += '&status_filter=$statusFilter';
+      }
+
+      final uri = Uri.parse('$baseUrl/api/kling/history$queryParams');
+      print('📜 获取历史记录: $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ 获取历史记录成功: ${data['total']}条');
+        return data;
+      } else {
+        print('❌ 获取失败: ${response.body}');
+        throw Exception('获取历史记录失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 获取错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 获取历史记录详情
+  Future<Map<String, dynamic>> getHistoryDetail(String petId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/history/$petId');
+      print('📋 获取详情: $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ 获取详情成功');
+        return data;
+      } else {
+        print('❌ 获取失败: ${response.body}');
+        throw Exception('获取详情失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 获取错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 删除历史记录
+  Future<void> deleteHistory(String petId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/history/$petId');
+      print('🗑️ 删除记录: $uri');
+
+      final response = await http.delete(uri);
+
+      if (response.statusCode == 200) {
+        print('✅ 删除成功');
+      } else {
+        print('❌ 删除失败: ${response.body}');
+        throw Exception('删除失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 删除错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 获取所有下载链接
+  Future<Map<String, dynamic>> getDownloadLinks(String petId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/download-all/$petId');
+      print('🔗 获取下载链接: $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ 获取下载链接成功');
+        return data;
+      } else {
+        print('❌ 获取失败: ${response.body}');
+        throw Exception('获取下载链接失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 获取错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 获取文件下载URL
+  String getDownloadUrl(String relativePath) {
+    return '$baseUrl$relativePath';
+  }
+
+  /// 获取ZIP下载URL
+  String getZipDownloadUrl(String petId, {String include = 'gifs'}) {
+    return '$baseUrl/api/kling/download-zip/$petId?include=$include';
   }
 }
 

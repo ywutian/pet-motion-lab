@@ -1,11 +1,13 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:provider/provider.dart';
 import '../services/kling_generation_service.dart';
 import '../providers/settings_provider.dart';
-import '../utils/download_helper.dart';
+import '../models/cross_platform_file.dart';
+import '../utils/file_picker_helper.dart';
+import '../utils/web_download_helper.dart';
 import 'kling_result_screen.dart';
 import 'kling_step_by_step_screen.dart';
 import 'kling_steps/step_init_screen.dart';
@@ -19,11 +21,13 @@ class KlingGenerationScreen extends StatefulWidget {
 }
 
 class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
-  File? _selectedImage;
-  final ImagePicker _picker = ImagePicker();
+  CrossPlatformFile? _selectedImage;
+  Uint8List? _imageBytes; // 用于预览
 
   final TextEditingController _breedController = TextEditingController();
   final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _weightController = TextEditingController();
+  final TextEditingController _birthdayController = TextEditingController();
   String _species = '猫';
 
   bool _isGenerating = false;
@@ -38,6 +42,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       final settings = Provider.of<SettingsProvider>(context, listen: false);
       _breedController.text = settings.lastPetBreed.isEmpty ? '布偶猫' : settings.lastPetBreed;
       _colorController.text = settings.lastPetColor.isEmpty ? '蓝色' : settings.lastPetColor;
+      _weightController.text = settings.lastPetWeight;
+      _birthdayController.text = settings.lastPetBirthday;
       setState(() {
         _species = settings.lastPetSpecies.isEmpty ? '猫' : settings.lastPetSpecies;
       });
@@ -45,10 +51,11 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
+    final file = await FilePickerHelper.pickImage();
+    if (file != null) {
       setState(() {
-        _selectedImage = File(image.path);
+        _selectedImage = file;
+        _imageBytes = file.bytes;
       });
     }
   }
@@ -74,6 +81,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       _breedController.text,
       _colorController.text,
       _species,
+      weight: _weightController.text,
+      birthday: _birthdayController.text,
     );
 
     setState(() {
@@ -85,12 +94,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
     try {
       final service = KlingGenerationService();
 
-      // 开始生成
+      // 开始生成（跨平台）
       final petId = await service.startGeneration(
         imageFile: _selectedImage!,
         breed: _breedController.text,
         color: _colorController.text,
         species: _species,
+        weight: _weightController.text,
+        birthday: _birthdayController.text,
       );
 
       // 轮询状态
@@ -253,10 +264,12 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.file(
-            _selectedImage!,
-            fit: BoxFit.cover,
-          ),
+          child: _imageBytes != null
+              ? Image.memory(
+                  _imageBytes!,
+                  fit: BoxFit.cover,
+                )
+              : const Center(child: CircularProgressIndicator()),
         ),
         Positioned(
           top: 8,
@@ -265,6 +278,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
             onPressed: _isGenerating ? null : () {
               setState(() {
                 _selectedImage = null;
+                _imageBytes = null;
               });
             },
             icon: const Icon(Icons.close),
@@ -331,6 +345,47 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                     _species = newSelection.first;
                   });
                 },
+              ),
+              const SizedBox(height: 16),
+
+              // 重量
+              TextField(
+                controller: _weightController,
+                enabled: !_isGenerating,
+                decoration: const InputDecoration(
+                  labelText: '重量（可选）',
+                  hintText: '如：5kg、3.5kg',
+                  prefixIcon: Icon(Icons.monitor_weight),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 生日
+              TextField(
+                controller: _birthdayController,
+                enabled: !_isGenerating,
+                decoration: const InputDecoration(
+                  labelText: '生日（可选）',
+                  hintText: '如：2020-01-01',
+                  prefixIcon: Icon(Icons.cake),
+                  border: OutlineInputBorder(),
+                ),
+                onTap: () async {
+                  if (_isGenerating) return;
+                  final DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    });
+                  }
+                },
+                readOnly: true,
               ),
             ],
           ),
@@ -416,14 +471,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () async {
-                  await DownloadHelper.downloadVideoAndSaveToGallery(
+                  await WebDownloadHelper.downloadVideo(
                     context: context,
                     filePath: 'output/kling_pipeline/pet_1763429522/videos/sit2walk.mp4',
                     customFileName: 'sit2walk_${DateTime.now().millisecondsSinceEpoch}.mp4',
                   );
                 },
                 icon: const Icon(Icons.download),
-                label: const Text('下载到相册'),
+                label: const Text('下载视频'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -441,6 +496,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   void dispose() {
     _breedController.dispose();
     _colorController.dispose();
+    _weightController.dispose();
+    _birthdayController.dispose();
     super.dispose();
   }
 }
