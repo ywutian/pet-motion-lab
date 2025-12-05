@@ -20,3 +20,6 @@ requests>=2.31.0
 pydantic>=2.5.0
 python-dotenv>=1.0.0
 
+# 云数据库 (Turso - SQLite 云端版)
+libsql-experimental>=0.0.47
+
