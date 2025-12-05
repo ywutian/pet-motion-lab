@@ -16,9 +16,9 @@ class ApiConfig {
       return _envApiUrl;
     }
 
-    // 2. 生产环境：使用已部署的后端
+    // 2. 生产环境：使用已部署的后端 (Railway)
     if (!kDebugMode) {
-      return 'https://pet-motion-lab-api.onrender.com';
+      return 'https://pet-motion-lab-api.up.railway.app';
     }
 
     // 3. 本地开发环境
