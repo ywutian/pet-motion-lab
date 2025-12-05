@@ -103,7 +103,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: settings.defaultStaticModel,
+                value: settings.defaultStaticModel,
                 decoration: const InputDecoration(
                   labelText: '默认静态模型',
                   border: OutlineInputBorder(),
@@ -124,7 +124,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                initialValue: settings.defaultVideoModel,
+                value: settings.defaultVideoModel,
                 decoration: const InputDecoration(
                   labelText: '默认视频模型',
                   border: OutlineInputBorder(),
@@ -529,7 +529,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: settings.defaultResolution,
+                value: settings.defaultResolution,
                 decoration: const InputDecoration(
                   labelText: '默认分辨率',
                   border: OutlineInputBorder(),
@@ -576,7 +576,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               DropdownButtonFormField<int>(
-                initialValue: settings.defaultFps,
+                value: settings.defaultFps,
                 decoration: const InputDecoration(
                   labelText: '默认FPS',
                   border: OutlineInputBorder(),
