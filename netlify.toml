@@ -5,8 +5,8 @@
   publish = "build/web"
 
 [build.environment]
-  # Flutter 需要的环境变量
-  FLUTTER_VERSION = "3.24.0"
+  # Flutter 需要的环境变量 (需要 Dart 3.6+ 支持 url_launcher)
+  FLUTTER_VERSION = "3.27.1"
   API_BASE_URL = "https://pet-motion-lab-api.up.railway.app"
 
 # SPA 路由支持 - 所有路径都返回 index.html

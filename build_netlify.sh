@@ -3,8 +3,8 @@ set -e
 
 echo "🚀 Netlify Flutter 构建开始..."
 
-# Flutter 版本
-FLUTTER_VERSION="${FLUTTER_VERSION:-3.24.0}"
+# 使用最新稳定版 Flutter (需要 Dart 3.6+)
+FLUTTER_VERSION="${FLUTTER_VERSION:-3.27.1}"
 
 # 检查是否已缓存 Flutter
 if [ ! -d "flutter" ]; then
