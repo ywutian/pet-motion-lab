@@ -31,6 +31,7 @@ flutter pub get
 # 构建 Web 应用
 echo "🔨 构建 Flutter Web..."
 flutter build web --release --web-renderer canvaskit \
+  --base-href "/" \
   --dart-define=API_BASE_URL=${API_BASE_URL:-https://pet-motion-lab-api.up.railway.app}
 
 echo "✅ 构建完成!"
