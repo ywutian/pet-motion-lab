@@ -235,7 +235,13 @@ class _KlingStepByStepScreenState extends State<KlingStepByStepScreen> {
                 )
               : ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                  child: Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Image.file(
+                      _selectedImage!,
+                      fit: BoxFit.contain, // 完整显示图片
+                    ),
+                  ),
                 ),
         ),
       ),

@@ -325,18 +325,28 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   Widget _buildImagePreview() {
+    final theme = Theme.of(context);
+    
     return Stack(
-      fit: StackFit.expand,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: _imageBytes != null
-              ? Image.memory(
-                  _imageBytes!,
-                  fit: BoxFit.cover,
-                )
-              : const Center(child: CircularProgressIndicator()),
+        // 背景容器
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: _imageBytes != null
+                  ? Center(
+                      child: Image.memory(
+                        _imageBytes!,
+                        fit: BoxFit.contain, // 完整显示图片，不裁切
+                      ),
+                    )
+                  : const Center(child: CircularProgressIndicator()),
+            ),
+          ),
         ),
+        // 关闭按钮
         Positioned(
           top: 8,
           right: 8,
@@ -351,6 +361,16 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
             style: IconButton.styleFrom(
               backgroundColor: Colors.black54,
             ),
+          ),
+        ),
+        // 重新选择按钮
+        Positioned(
+          bottom: 8,
+          right: 8,
+          child: FilledButton.tonalIcon(
+            onPressed: _isGenerating ? null : _pickImage,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('重新选择'),
           ),
         ),
       ],

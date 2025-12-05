@@ -221,16 +221,17 @@ class _HistoryCard extends StatelessWidget {
             if (thumbnailUrl != null)
               AspectRatio(
                 aspectRatio: 16 / 9,
-                child: CachedNetworkImage(
-                  imageUrl: '${ApiConfig.baseUrl}$thumbnailUrl',
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[200],
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[200],
-                    child: const Icon(Icons.pets, size: 48),
+                child: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: CachedNetworkImage(
+                    imageUrl: '${ApiConfig.baseUrl}$thumbnailUrl',
+                    fit: BoxFit.contain, // 完整显示图片
+                    placeholder: (context, url) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    errorWidget: (context, url, error) => const Center(
+                      child: Icon(Icons.pets, size: 48),
+                    ),
                   ),
                 ),
               )
@@ -238,7 +239,7 @@ class _HistoryCard extends StatelessWidget {
               AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Container(
-                  color: Colors.grey[200],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: const Icon(Icons.pets, size: 48),
                 ),
               ),

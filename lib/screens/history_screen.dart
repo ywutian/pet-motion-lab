@@ -224,9 +224,12 @@ class TaskCard extends StatelessWidget {
     final file = File(firstImage.fileIn);
     
     if (file.existsSync()) {
-      return Image.file(
-        file,
-        fit: BoxFit.cover,
+      return Container(
+        color: Colors.grey[200],
+        child: Image.file(
+          file,
+          fit: BoxFit.contain, // 完整显示图片
+        ),
       );
     }
     

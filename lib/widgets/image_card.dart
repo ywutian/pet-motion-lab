@@ -175,9 +175,12 @@ class _ImageCardState extends State<ImageCard> {
             children: [
               AspectRatio(
                 aspectRatio: 16 / 9,
-                child: Image.file(
-                  displayFile,
-                  fit: BoxFit.cover,
+                child: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Image.file(
+                    displayFile,
+                    fit: BoxFit.contain, // 完整显示图片
+                  ),
                 ),
               ),
               Positioned(
@@ -932,7 +935,7 @@ class _PresetSelectionSheetState extends State<PresetSelectionSheet> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedSpecies,
+                      value: selectedSpecies,
                       decoration: const InputDecoration(
                         labelText: '宠物种类',
                         border: OutlineInputBorder(),
@@ -951,7 +954,7 @@ class _PresetSelectionSheetState extends State<PresetSelectionSheet> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedPose,
+                      value: selectedPose,
                       decoration: const InputDecoration(
                         labelText: '姿势',
                         border: OutlineInputBorder(),
@@ -970,7 +973,7 @@ class _PresetSelectionSheetState extends State<PresetSelectionSheet> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedAngle,
+                      value: selectedAngle,
                       decoration: const InputDecoration(
                         labelText: '角度',
                         border: OutlineInputBorder(),
