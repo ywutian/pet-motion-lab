@@ -7,7 +7,6 @@ import '../services/kling_generation_service.dart';
 import '../providers/settings_provider.dart';
 import '../models/cross_platform_file.dart';
 import '../utils/file_picker_helper.dart';
-import '../utils/web_download_helper.dart';
 import '../utils/responsive.dart';
 import '../widgets/responsive_layout.dart';
 import 'kling_result_screen.dart';
@@ -219,8 +218,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildImageUploadSection(),
-          SizedBox(height: spacing),
-          _buildTempDownloadButton(),
         ],
       ),
       rightChild: Column(
@@ -247,8 +244,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         _buildConfigSection(),
         SizedBox(height: spacing * 1.5),
         _buildGenerateButton(),
-        SizedBox(height: spacing),
-        _buildTempDownloadButton(),
         if (_isGenerating) ...[
           SizedBox(height: spacing * 1.5),
           _buildProgressSection(),
@@ -627,58 +622,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: isDesktop ? 28 : 24,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTempDownloadButton() {
-    return FadeInUp(
-      child: Card(
-        elevation: 2,
-        color: Colors.green.shade50,
-        child: Padding(
-          padding: Responsive.cardPadding(context),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.download, color: Colors.green.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '临时下载：sit2walk 视频',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await WebDownloadHelper.downloadVideo(
-                      context: context,
-                      filePath: 'output/kling_pipeline/pet_1763429522/videos/sit2walk.mp4',
-                      customFileName: 'sit2walk_${DateTime.now().millisecondsSinceEpoch}.mp4',
-                    );
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('下载视频'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
                 ),
               ),
             ],
