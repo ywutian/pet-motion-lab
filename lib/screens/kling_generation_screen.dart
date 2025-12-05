@@ -8,6 +8,8 @@ import '../providers/settings_provider.dart';
 import '../models/cross_platform_file.dart';
 import '../utils/file_picker_helper.dart';
 import '../utils/web_download_helper.dart';
+import '../utils/responsive.dart';
+import '../widgets/responsive_layout.dart';
 import 'kling_result_screen.dart';
 import 'kling_step_by_step_screen.dart';
 import 'kling_steps/step_init_screen.dart';
@@ -143,10 +145,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = Responsive.isDesktop(context);
+    final spacing = Responsive.spacing(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('🎬 可灵AI宠物动画生成'),
         elevation: 0,
+        centerTitle: !isDesktop,
         actions: [
           // 步骤选择器按钮
           IconButton(
@@ -162,62 +168,109 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
             tooltip: '选择步骤',
           ),
           // 分步模式按钮
-          TextButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const StepInitScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.stairs),
-            label: const Text('分步模式'),
-          ),
+          if (isDesktop)
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const StepInitScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.stairs),
+              label: const Text('分步模式'),
+            )
+          else
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const StepInitScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.stairs),
+              tooltip: '分步模式',
+            ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 上传图片区域
-            _buildImageUploadSection(),
-            const SizedBox(height: 32),
-
-            // 配置区域
-            _buildConfigSection(),
-            const SizedBox(height: 32),
-
-            // 生成按钮
-            _buildGenerateButton(),
-
-            // 临时下载按钮
-            const SizedBox(height: 16),
-            _buildTempDownloadButton(),
-
-            // 进度显示
-            if (_isGenerating) ...[
-              const SizedBox(height: 32),
-              _buildProgressSection(),
-            ],
-          ],
-        ),
+      body: ResponsiveScrollLayout(
+        padding: Responsive.pagePadding(context),
+        maxWidth: 1200,
+        children: [
+          // 桌面端使用两栏布局
+          if (isDesktop)
+            _buildDesktopLayout(spacing)
+          else
+            _buildMobileLayout(spacing),
+        ],
       ),
     );
   }
 
+  Widget _buildDesktopLayout(double spacing) {
+    return ResponsiveTwoColumn(
+      leftFlex: 1,
+      rightFlex: 1,
+      spacing: spacing * 2,
+      leftChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildImageUploadSection(),
+          SizedBox(height: spacing),
+          _buildTempDownloadButton(),
+        ],
+      ),
+      rightChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildConfigSection(),
+          SizedBox(height: spacing),
+          _buildGenerateButton(),
+          if (_isGenerating) ...[
+            SizedBox(height: spacing),
+            _buildProgressSection(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(double spacing) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildImageUploadSection(),
+        SizedBox(height: spacing * 1.5),
+        _buildConfigSection(),
+        SizedBox(height: spacing * 1.5),
+        _buildGenerateButton(),
+        SizedBox(height: spacing),
+        _buildTempDownloadButton(),
+        if (_isGenerating) ...[
+          SizedBox(height: spacing * 1.5),
+          _buildProgressSection(),
+        ],
+      ],
+    );
+  }
+
   Widget _buildImageUploadSection() {
+    final isDesktop = Responsive.isDesktop(context);
+    final height = isDesktop ? 400.0 : 280.0;
+
     return FadeInDown(
       child: Card(
         elevation: 2,
         child: InkWell(
           onTap: _isGenerating ? null : _pickImage,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            height: 300,
+            height: height,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
                 width: 2,
@@ -234,18 +287,23 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   Widget _buildUploadPlaceholder() {
+    final isDesktop = Responsive.isDesktop(context);
+    final iconSize = isDesktop ? 100.0 : 72.0;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(
           Icons.cloud_upload_outlined,
-          size: 80,
+          size: iconSize,
           color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
         ),
         const SizedBox(height: 16),
         Text(
           '点击上传宠物图片',
-          style: Theme.of(context).textTheme.titleLarge,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: isDesktop ? 22 : 18,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -254,6 +312,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
+        if (isDesktop) ...[
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _isGenerating ? null : _pickImage,
+            icon: const Icon(Icons.folder_open),
+            label: const Text('选择文件'),
+          ),
+        ],
       ],
     );
   }
@@ -263,7 +329,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       fit: StackFit.expand,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: _imageBytes != null
               ? Image.memory(
                   _imageBytes!,
@@ -292,23 +358,45 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   Widget _buildConfigSection() {
+    final isDesktop = Responsive.isDesktop(context);
+    final padding = Responsive.cardPadding(context);
+
     return FadeInUp(
       delay: const Duration(milliseconds: 200),
       child: Card(
         elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: padding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '宠物信息',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: isDesktop ? 22 : 18,
+                ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: isDesktop ? 24 : 16),
 
-              // 品种
-              TextField(
+              // 桌面端使用两列布局
+              if (isDesktop)
+                _buildDesktopFormFields()
+              else
+                _buildMobileFormFields(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopFormFields() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
                 controller: _breedController,
                 enabled: !_isGenerating,
                 decoration: const InputDecoration(
@@ -318,10 +406,10 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 颜色
-              TextField(
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
                 controller: _colorController,
                 enabled: !_isGenerating,
                 decoration: const InputDecoration(
@@ -331,10 +419,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 物种
-              SegmentedButton<String>(
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(value: '猫', label: Text('猫'), icon: Icon(Icons.pets)),
                   ButtonSegment(value: '犬', label: Text('犬'), icon: Icon(Icons.pets)),
@@ -346,23 +438,27 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   });
                 },
               ),
-              const SizedBox(height: 16),
-
-              // 重量
-              TextField(
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
                 controller: _weightController,
                 enabled: !_isGenerating,
                 decoration: const InputDecoration(
                   labelText: '重量（可选）',
-                  hintText: '如：5kg、3.5kg',
+                  hintText: '如：5kg',
                   prefixIcon: Icon(Icons.monitor_weight),
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 生日
-              TextField(
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
                 controller: _birthdayController,
                 enabled: !_isGenerating,
                 decoration: const InputDecoration(
@@ -371,30 +467,99 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   prefixIcon: Icon(Icons.cake),
                   border: OutlineInputBorder(),
                 ),
-                onTap: () async {
-                  if (_isGenerating) return;
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                    });
-                  }
-                },
+                onTap: () => _selectBirthday(),
                 readOnly: true,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
+      ],
     );
   }
 
+  Widget _buildMobileFormFields() {
+    return Column(
+      children: [
+        TextField(
+          controller: _breedController,
+          enabled: !_isGenerating,
+          decoration: const InputDecoration(
+            labelText: '品种',
+            hintText: '如：布偶猫、金毛犬',
+            prefixIcon: Icon(Icons.pets),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _colorController,
+          enabled: !_isGenerating,
+          decoration: const InputDecoration(
+            labelText: '颜色',
+            hintText: '如：蓝色、金色',
+            prefixIcon: Icon(Icons.palette),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: '猫', label: Text('猫'), icon: Icon(Icons.pets)),
+            ButtonSegment(value: '犬', label: Text('犬'), icon: Icon(Icons.pets)),
+          ],
+          selected: {_species},
+          onSelectionChanged: _isGenerating ? null : (Set<String> newSelection) {
+            setState(() {
+              _species = newSelection.first;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _weightController,
+          enabled: !_isGenerating,
+          decoration: const InputDecoration(
+            labelText: '重量（可选）',
+            hintText: '如：5kg、3.5kg',
+            prefixIcon: Icon(Icons.monitor_weight),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _birthdayController,
+          enabled: !_isGenerating,
+          decoration: const InputDecoration(
+            labelText: '生日（可选）',
+            hintText: '如：2020-01-01',
+            prefixIcon: Icon(Icons.cake),
+            border: OutlineInputBorder(),
+          ),
+          onTap: () => _selectBirthday(),
+          readOnly: true,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _selectBirthday() async {
+    if (_isGenerating) return;
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      });
+    }
+  }
+
   Widget _buildGenerateButton() {
+    final isDesktop = Responsive.isDesktop(context);
+
     return FadeInUp(
       delay: const Duration(milliseconds: 400),
       child: FilledButton.icon(
@@ -402,30 +567,37 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         icon: const Icon(Icons.auto_awesome),
         label: const Text('开始生成'),
         style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          padding: EdgeInsets.symmetric(vertical: isDesktop ? 24 : 18),
+          textStyle: TextStyle(
+            fontSize: isDesktop ? 20 : 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
   }
 
   Widget _buildProgressSection() {
+    final isDesktop = Responsive.isDesktop(context);
+
     return FadeIn(
       child: Card(
         elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: Responsive.cardPadding(context),
           child: Column(
             children: [
               LinearProgressIndicator(
                 value: _progress,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(4),
+                minHeight: isDesktop ? 10 : 8,
+                borderRadius: BorderRadius.circular(5),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: isDesktop ? 20 : 16),
               Text(
                 _statusMessage,
-                style: Theme.of(context).textTheme.bodyLarge,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontSize: isDesktop ? 16 : 14,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -434,6 +606,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.primary,
+                  fontSize: isDesktop ? 28 : 24,
                 ),
               ),
             ],
@@ -449,7 +622,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         elevation: 2,
         color: Colors.green.shade50,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: Responsive.cardPadding(context),
           child: Column(
             children: [
               Row(
@@ -469,20 +642,23 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  await WebDownloadHelper.downloadVideo(
-                    context: context,
-                    filePath: 'output/kling_pipeline/pet_1763429522/videos/sit2walk.mp4',
-                    customFileName: 'sit2walk_${DateTime.now().millisecondsSinceEpoch}.mp4',
-                  );
-                },
-                icon: const Icon(Icons.download),
-                label: const Text('下载视频'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 48),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await WebDownloadHelper.downloadVideo(
+                      context: context,
+                      filePath: 'output/kling_pipeline/pet_1763429522/videos/sit2walk.mp4',
+                      customFileName: 'sit2walk_${DateTime.now().millisecondsSinceEpoch}.mp4',
+                    );
+                  },
+                  icon: const Icon(Icons.download),
+                  label: const Text('下载视频'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                 ),
               ),
             ],
@@ -501,4 +677,3 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
     super.dispose();
   }
 }
-
