@@ -17,6 +17,7 @@ from prompt_config.prompts import (
     get_base_pose_prompt,
     get_transition_prompt,
     get_loop_prompt,
+    get_negative_prompt,
     FIRST_TRANSITIONS,
     POSES,
     get_all_transitions,
@@ -613,8 +614,15 @@ class KlingPipeline:
 
         return videos, other_poses, first_frames, last_frames
 
-    def _generate_transition_video(self, transition: str, start_image: str) -> str:
-        """生成单个过渡视频，带重试机制"""
+    def _generate_transition_video(self, transition: str, start_image: str, end_image: str = None) -> str:
+        """
+        生成单个过渡视频，带重试机制
+        
+        Args:
+            transition: 过渡名称，如 "sit2walk"
+            start_image: 首帧图片路径
+            end_image: 尾帧图片路径（可选，如果提供则使用首尾帧模式）
+        """
         # 如果使用v3.0 prompt系统
         if self.use_v3_prompts and self.body_type:
             from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
@@ -628,15 +636,25 @@ class KlingPipeline:
             # 使用旧版prompt
             prompt = get_transition_prompt(transition, self.breed, self.color, self.species)
 
+        # 获取负向提示词
+        negative_prompt = get_negative_prompt()
         print(f"    提示词: {prompt}")
+        print(f"    负向提示词: {negative_prompt}")
+        
+        if end_image:
+            print(f"    🎯 首尾帧模式: {start_image} → {end_image}")
 
         def do_generate():
-            # 调用可灵AI图生视频
+            # 调用可灵AI图生视频（支持首尾帧）
             result = self.kling.image_to_video(
                 image_path=start_image,
                 prompt=prompt,
-                duration=5,
-                aspect_ratio="16:9"
+                negative_prompt=negative_prompt,
+                duration=self.video_duration,
+                aspect_ratio="16:9",
+                model_name=self.video_model,
+                mode=self.video_mode,
+                tail_image_path=end_image  # 传入尾帧（如果有）
             )
 
             task_id = result['task_id']
@@ -665,7 +683,12 @@ class KlingPipeline:
         return output_path
 
     def _generate_remaining_transitions(self) -> Dict:
-        """生成剩余9个过渡视频"""
+        """
+        生成剩余过渡视频（使用首尾帧模式）
+        
+        首尾帧模式：同时指定首帧和尾帧图片，AI 会生成从首帧到尾帧的平滑过渡
+        这样可以确保视频的结束姿势与目标姿势完全一致
+        """
         all_transitions = get_all_transitions()
         remaining = [t for t in all_transitions if t not in FIRST_TRANSITIONS]
 
@@ -680,14 +703,21 @@ class KlingPipeline:
 
             print(f"\n  生成 {transition}... [{idx+1}/{total}]")
 
-            start_pose = transition.split("2")[0]
+            # 解析起始和结束姿势
+            start_pose, end_pose = transition.split("2")
             start_image = str(self.images_dir / f"{start_pose}.png")
+            end_image = str(self.images_dir / f"{end_pose}.png")
 
             if not os.path.exists(start_image):
                 print(f"  ⚠️  跳过 {transition}：{start_pose}.png 不存在")
                 continue
+            
+            if not os.path.exists(end_image):
+                print(f"  ⚠️  跳过 {transition}：{end_pose}.png 不存在（无法使用首尾帧模式）")
+                continue
 
-            video_path = self._generate_transition_video(transition, start_image)
+            # 使用首尾帧模式生成视频
+            video_path = self._generate_transition_video(transition, start_image, end_image)
             videos[transition] = video_path
 
         return videos
@@ -723,16 +753,24 @@ class KlingPipeline:
                 # 使用旧版prompt
                 prompt = get_loop_prompt(pose, self.breed, self.color, self.species)
 
+            # 获取负向提示词
+            negative_prompt = get_negative_prompt()
             print(f"    提示词: {prompt}")
+            print(f"    负向提示词: {negative_prompt}")
 
-            def do_generate(p=pose, pi=pose_image, pr=prompt):
-                # 调用可灵AI图生视频
+            def do_generate(p=pose, pi=pose_image, pr=prompt, np=negative_prompt):
+                # 调用可灵AI图生视频（循环视频使用首尾帧相同，实现无缝循环）
                 result = self.kling.image_to_video(
                     image_path=pi,
                     prompt=pr,
-                    duration=5,
-                    aspect_ratio="16:9"
+                    negative_prompt=np,
+                    duration=self.video_duration,
+                    aspect_ratio="16:9",
+                    model_name=self.video_model,
+                    mode=self.video_mode,
+                    tail_image_path=pi  # 尾帧与首帧相同，实现无缝循环
                 )
+                print(f"    🔄 循环视频模式：首尾帧相同，可无缝循环")
 
                 task_id = result['task_id']
                 print(f"    任务ID: {task_id}")
@@ -827,70 +865,89 @@ class KlingPipeline:
     def _sort_videos_by_transition(self, video_files: list) -> list:
         """
         根据过渡关系智能排序视频，形成连贯的动作序列
-        使用欧拉路径算法寻找最佳顺序
+        目标：从 sit 开始，最终回到 sit（首尾呼应）
+        
+        推荐顺序（星型拓扑）:
+        sit→walk→sit→rest→sit→sleep→sit
+        或者完整循环:
+        sit→walk→rest→sleep→sit
         """
         import re
         from collections import defaultdict
         
-        # 解析文件名: name -> (start_state, end_state)
-        graph = defaultdict(list)
-        out_degree = defaultdict(int)
-        in_degree = defaultdict(int)
-        
-        valid_files = []
+        # 解析文件名: name -> (start_state, end_state, file)
+        transitions = {}
         for f in video_files:
             name = f.stem
-            # 匹配 pattern: something2something
             match = re.search(r'([a-zA-Z]+)2([a-zA-Z]+)', name)
             if match:
                 start, end = match.groups()
-                start = start.lower()
-                end = end.lower()
-                
-                graph[start].append((end, f))
-                out_degree[start] += 1
-                in_degree[end] += 1
-                valid_files.append(f)
+                key = f"{start.lower()}2{end.lower()}"
+                transitions[key] = f
         
-        if not valid_files:
+        if not transitions:
             return sorted(video_files, key=lambda x: x.name)
         
-        # 对邻接表排序
-        for node in graph:
-            graph[node].sort(key=lambda x: x[1].name)
+        print(f"  🔄 构建首尾呼应的连贯序列（从sit开始，回到sit结束）...")
         
-        # 寻找起点（优先从sit开始）
-        start_node = 'sit' if 'sit' in out_degree else (max(out_degree, key=out_degree.get) if out_degree else None)
+        # 定义理想的播放顺序（首尾呼应）
+        # 方案1: 完整循环 sit→walk→rest→sleep→sit
+        ideal_order_1 = [
+            "sit2walk", "walk2rest", "rest2sleep", "sleep2sit"
+        ]
         
-        if not start_node:
-            return sorted(video_files, key=lambda x: x.name)
+        # 方案2: 星型拓扑（更完整展示所有动作）
+        # sit→walk→sit→rest→sit→sleep→sit
+        ideal_order_2 = [
+            "sit2walk", "walk2sit",
+            "sit2rest", "rest2sit",
+            "sit2sleep", "sleep2sit"
+        ]
         
-        print(f"  🔄 从 '{start_node}' 姿势开始构建连贯序列...")
+        # 方案3: 展示所有12个过渡（如果都有的话）
+        # 按照逻辑顺序排列，确保首尾呼应
+        ideal_order_3 = [
+            # 从sit出发
+            "sit2walk", "walk2rest", "rest2sleep", "sleep2sit",
+            # 再从sit出发走另一条路
+            "sit2rest", "rest2walk", "walk2sleep", "sleep2sit",
+            # 补充剩余的
+            "sit2sleep", "sleep2walk", "walk2sit",
+            "sleep2rest", "rest2sit"
+        ]
         
-        # Hierholzer 算法寻找欧拉路径
-        path = []
-        temp_graph = {k: v[:] for k, v in graph.items()}
+        # 选择最合适的顺序
+        ordered_files = []
+        used_keys = set()
         
-        def dfs(u):
-            while temp_graph[u]:
-                v, filename = temp_graph[u].pop(0)
-                dfs(v)
-                path.append(filename)
+        # 尝试按理想顺序添加
+        for key in ideal_order_3:
+            if key in transitions and key not in used_keys:
+                ordered_files.append(transitions[key])
+                used_keys.add(key)
         
-        dfs(start_node)
+        # 添加剩余的视频（按字母顺序）
+        for key, f in sorted(transitions.items()):
+            if key not in used_keys:
+                ordered_files.append(f)
+                used_keys.add(key)
         
-        # 逆序
-        ordered_path = path[::-1]
+        # 检查首尾是否呼应
+        if ordered_files:
+            first_name = ordered_files[0].stem
+            last_name = ordered_files[-1].stem
+            first_match = re.search(r'([a-zA-Z]+)2', first_name)
+            last_match = re.search(r'2([a-zA-Z]+)', last_name)
+            
+            if first_match and last_match:
+                start_pose = first_match.group(1).lower()
+                end_pose = last_match.group(1).lower()
+                if start_pose == end_pose:
+                    print(f"  ✅ 首尾呼应: 从 {start_pose} 开始，回到 {end_pose} 结束")
+                else:
+                    print(f"  ⚠️  首尾不一致: 从 {start_pose} 开始，到 {end_pose} 结束")
         
-        # 检查是否所有视频都包含
-        if len(ordered_path) != len(valid_files):
-            used_files = set(ordered_path)
-            leftover = [f for f in valid_files if f not in used_files]
-            if leftover:
-                print(f"  ⚠️  部分视频无法连贯连接，追加 {len(leftover)} 个视频到末尾")
-                ordered_path.extend(sorted(leftover, key=lambda x: x.name))
-        
-        return ordered_path
+        return ordered_files
 
     def _extract_image_url(self, task_data: dict) -> str:
         """从任务数据中提取图片URL"""

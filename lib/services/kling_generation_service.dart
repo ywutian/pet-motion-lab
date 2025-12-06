@@ -7,6 +7,7 @@ import '../models/cross_platform_file.dart';
 import '../providers/settings_provider.dart';
 
 /// 生成配置（从 SettingsProvider 获取）
+/// 仅支持首尾帧的模型: kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master
 class GenerationConfig {
   final String videoModel;
   final String videoMode;
@@ -18,8 +19,8 @@ class GenerationConfig {
   final String gifRembgModel;
 
   const GenerationConfig({
-    this.videoModel = 'kling-v2-1-master',
-    this.videoMode = 'pro',
+    this.videoModel = 'kling-v2-5-turbo',  // 默认使用性价比最高的模型
+    this.videoMode = 'pro',                 // PRO 模式支持首尾帧
     this.videoDuration = 5,
     this.imageRemovalMethod = 'removebg',
     this.imageRembgModel = 'u2net',

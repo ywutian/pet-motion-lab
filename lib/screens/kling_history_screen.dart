@@ -421,16 +421,14 @@ class _HistoryCard extends StatelessWidget {
   }
 
   String _formatModelName(String model) {
-    // 简化模型名称显示
+    // 简化模型名称显示（仅支持首尾帧的模型）
     switch (model) {
       case 'kling-v2-5-turbo':
-        return 'V2.5 Turbo';
+        return 'V2.5 Turbo ⭐';
       case 'kling-v2-1':
         return 'V2.1';
       case 'kling-v2-1-master':
         return 'V2.1 Master';
-      case 'kling-v1':
-        return 'V1';
       default:
         return model.replaceAll('kling-', '').toUpperCase();
     }

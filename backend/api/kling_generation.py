@@ -836,8 +836,8 @@ async def generate_pet_animations(
     weight: str = Form(""),
     birthday: str = Form(""),
     # 视频生成配置（前端设置）
-    video_model: str = Form("kling-v2-5-turbo"),  # kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master
-    video_mode: str = Form("pro"),  # pro / std
+    video_model: str = Form("kling-v2-5-turbo"),  # 支持首尾帧: kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master
+    video_mode: str = Form("pro"),  # 强制 PRO/Master 模式以支持首尾帧
     video_duration: int = Form(5),  # 5 / 10
     # 背景去除配置
     image_removal_method: str = Form("removebg"),  # rembg / removebg
@@ -856,7 +856,7 @@ async def generate_pet_animations(
         species: 物种（猫/犬）
         weight: 重量（可选，如：5kg）
         birthday: 生日（可选，如：2020-01-01）
-        video_model: 视频模型 (kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master)
+        video_model: 视频模型，支持首尾帧 (kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master)
         video_mode: 视频模式 (pro / std)
         video_duration: 视频时长 (5 / 10)
         image_removal_method: 图片去背景方式 (rembg / removebg)

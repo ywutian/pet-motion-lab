@@ -9,10 +9,10 @@ enum BackgroundRemovalMethod {
 
 class SettingsProvider with ChangeNotifier {
   // ============================================
-  // 视频生成配置
+  // 视频生成配置（仅支持首尾帧的模型）
   // ============================================
   String _videoModel = 'kling-v2-5-turbo'; // 默认使用最新最划算的模型
-  String _videoMode = 'std';                // std(720p) 更便宜
+  String _videoMode = 'pro';                // PRO 模式支持首尾帧
   int _videoDuration = 5;                   // 5秒
 
   // ============================================
@@ -94,9 +94,14 @@ class SettingsProvider with ChangeNotifier {
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 视频生成配置
+    // 视频生成配置（仅支持首尾帧的模型，强制 PRO 模式）
     _videoModel = prefs.getString('video_model') ?? 'kling-v2-5-turbo';
-    _videoMode = prefs.getString('video_mode') ?? 'std';
+    // 验证模型是否支持首尾帧，不支持则回退到默认
+    if (!['kling-v2-5-turbo', 'kling-v2-1', 'kling-v2-1-master'].contains(_videoModel)) {
+      _videoModel = 'kling-v2-5-turbo';
+    }
+    // 强制使用 PRO/Master 模式以支持首尾帧
+    _videoMode = _videoModel.contains('master') ? 'master' : 'pro';
     _videoDuration = prefs.getInt('video_duration') ?? 5;
     
     // 图片背景去除

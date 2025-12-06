@@ -15,9 +15,13 @@
 # 通用约束前缀和后缀
 # ============================================
 STYLE_PREFIX = "皮克斯风格3D卡通，可爱圆润的造型，大眼睛，"
-BACKGROUND_CONSTRAINT = "纯白色背景(#FFFFFF)，无任何其他元素，无阴影，无地面，"
+# 更强的背景约束
+BACKGROUND_CONSTRAINT = "【重要】整个视频从头到尾保持纯白色背景(#FFFFFF)，背景绝对不能变化，无任何其他元素，无阴影，无地面，无环境变化，"
 CAMERA_CONSTRAINT = "镜头正对{species}正前方，平视角度，{species}居中，全身入镜，"
-LIGHTING_CONSTRAINT = "柔和均匀的摄影棚灯光，无强烈阴影。"
+LIGHTING_CONSTRAINT = "柔和均匀的摄影棚灯光，无强烈阴影，光照保持一致不变化。"
+
+# 负向提示词（用于排除不想要的元素）
+NEGATIVE_PROMPT = "背景变化,环境变化,场景切换,草地,地板,室内,室外,阴影变化,光照变化,颜色变化,模糊,低质量"
 
 # ============================================
 # 基础姿势提示词（图生图 - 生成第一张基准图）
@@ -91,7 +95,7 @@ TRANSITION_PROMPTS = {
     "walk2sit": (
         STYLE_PREFIX + "{breed}{color}{species}，"
         + BACKGROUND_CONSTRAINT
-        + "动作：从行走状态停下并坐下，步伐逐渐减慢，后腿收拢，臀部下沉着地，前腿伸直支撑，尾巴自然放置，头部抬起看向前方，"
+        + "动作：从行走状态停下并坐下，步伐逐渐减慢，后腿收拢，臀部下沉着地，【结束姿势必须是标准坐姿】：前腿伸直撑地，后腿收于身下，尾巴自然放置，头部微微抬起，眼睛看向镜头，"
         + CAMERA_CONSTRAINT
         + "镜头保持固定不动，" + LIGHTING_CONSTRAINT
     ),
@@ -112,7 +116,7 @@ TRANSITION_PROMPTS = {
     "sleep2sit": (
         STYLE_PREFIX + "{breed}{color}{species}，"
         + BACKGROUND_CONSTRAINT
-        + "动作：从睡眠中醒来并坐起，眼睛缓慢睁开，头部抬起，前腿撑地，身体抬起成坐姿，伸懒腰，表情略显慵懒，"
+        + "动作：从睡眠中醒来并坐起，眼睛缓慢睁开，头部抬起，前腿撑地，身体抬起，【结束姿势必须是标准坐姿】：前腿伸直撑地，后腿收于身下，尾巴自然放置，头部微微抬起，眼睛看向镜头，"
         + CAMERA_CONSTRAINT
         + "镜头保持固定不动，" + LIGHTING_CONSTRAINT
     ),
@@ -133,7 +137,7 @@ TRANSITION_PROMPTS = {
     "rest2sit": (
         STYLE_PREFIX + "{breed}{color}{species}，"
         + BACKGROUND_CONSTRAINT
-        + "动作：从趴卧姿势坐起，前腿撑地发力，身体抬起，后腿收拢，臀部着地成坐姿，头部抬高，眼睛看向前方，"
+        + "动作：从趴卧姿势坐起，前腿撑地发力，身体抬起，后腿收拢，臀部着地，【结束姿势必须是标准坐姿】：前腿伸直撑地，后腿收于身下，尾巴自然放置，头部微微抬起，眼睛看向镜头，"
         + CAMERA_CONSTRAINT
         + "镜头保持固定不动，" + LIGHTING_CONSTRAINT
     ),
@@ -223,6 +227,11 @@ def get_loop_prompt(pose: str, breed: str, color: str, species: str) -> str:
     if pose not in LOOP_PROMPTS:
         raise ValueError(f"未知姿势: {pose}，支持的姿势: {list(LOOP_PROMPTS.keys())}")
     return format_prompt(LOOP_PROMPTS[pose], breed, color, species)
+
+
+def get_negative_prompt() -> str:
+    """获取负向提示词（用于排除不想要的元素）"""
+    return NEGATIVE_PROMPT
 
 
 def get_all_transitions() -> list:

@@ -271,29 +271,31 @@ class KlingAPI:
         aspect_ratio: str = "16:9",
         model_name: str = "kling-v2-5-turbo",
         mode: str = "pro",
+        tail_image_path: str = None,
     ) -> dict:
         """
         图生视频API（使用base64编码）
 
         Args:
-            image_path: 输入图片路径
+            image_path: 输入图片路径（首帧）
             prompt: 提示词
             negative_prompt: 负向提示词
             duration: 视频时长（秒）
             aspect_ratio: 宽高比
             model_name: 模型名称，默认 "kling-v2-5-turbo" (最新，性价比高)
             mode: 生成模式，"std" 标准模式(720p) 或 "pro" 专业模式(1080p)，默认 "pro"
+            tail_image_path: 尾帧图片路径（可选，V2.5-Turbo PRO / V1.5 PRO / V1.6 PRO 支持）
 
         Returns:
             包含task_id的字典
         """
-        # 读取图片并转换为base64
+        # 读取首帧图片并转换为base64
         import base64
         with open(image_path, 'rb') as f:
             image_data = f.read()
             image_base64 = base64.b64encode(image_data).decode('utf-8')
 
-        print(f"  📤 图片已编码为base64，大小: {len(image_base64)} 字符")
+        print(f"  📤 首帧图片已编码为base64，大小: {len(image_base64)} 字符")
         print(f"  🎬 使用模型: {model_name} (模式: {mode})")
 
         # 创建视频生成任务（使用海外版API）
@@ -309,6 +311,19 @@ class KlingAPI:
             "duration": duration,
             "aspect_ratio": aspect_ratio,
         }
+        
+        # 如果提供了尾帧图片，添加到请求中
+        # 首尾帧功能支持的模型（PRO/Master 模式）：
+        # - kling-v2-5-turbo PRO ✅
+        # - kling-v2-1 PRO ✅
+        # - kling-v2-1-master ✅
+        if tail_image_path:
+            with open(tail_image_path, 'rb') as f:
+                tail_image_data = f.read()
+                tail_image_base64 = base64.b64encode(tail_image_data).decode('utf-8')
+            payload["image_tail"] = tail_image_base64
+            print(f"  📤 尾帧图片已编码为base64，大小: {len(tail_image_base64)} 字符")
+            print(f"  🎯 启用首尾帧模式：视频将从首帧过渡到尾帧")
 
         # 添加重试机制
         max_retries = 3

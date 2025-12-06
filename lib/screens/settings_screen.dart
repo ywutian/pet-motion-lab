@@ -57,49 +57,30 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               
-              // 模型选择
+              // 模型选择（仅保留支持首尾帧的模型）
               DropdownButtonFormField<String>(
                 value: settings.videoModel,
                 decoration: const InputDecoration(
                   labelText: '视频模型',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.movie_creation),
+                  helperText: '所有模型均支持首尾帧控制',
                 ),
                 isExpanded: true,
                 items: const [
-                  // V2.5 Turbo 系列（最新，推荐）
+                  // V2.5 Turbo 系列（最新，推荐，性价比最高）
                   DropdownMenuItem(
                     value: 'kling-v2-5-turbo',
-                    child: Text('kling-v2-5-turbo - std \$0.21 / pro \$0.35'),
+                    child: Text('kling-v2-5-turbo - pro \$0.35 ⭐推荐'),
                   ),
                   // V2.1 系列
                   DropdownMenuItem(
                     value: 'kling-v2-1',
-                    child: Text('kling-v2-1 - std \$0.28 / pro \$0.49'),
+                    child: Text('kling-v2-1 - pro \$0.49'),
                   ),
                   DropdownMenuItem(
                     value: 'kling-v2-1-master',
-                    child: Text('kling-v2-1-master - \$1.40'),
-                  ),
-                  // V2 Master 系列
-                  DropdownMenuItem(
-                    value: 'kling-v2-master',
-                    child: Text('kling-v2-master - \$1.40'),
-                  ),
-                  // V1.6 系列
-                  DropdownMenuItem(
-                    value: 'kling-v1-6',
-                    child: Text('kling-v1-6 - std \$0.28 / pro \$0.49'),
-                  ),
-                  // V1.5 系列
-                  DropdownMenuItem(
-                    value: 'kling-v1-5',
-                    child: Text('kling-v1-5 - std \$0.28 / pro \$0.49'),
-                  ),
-                  // V1 系列（最便宜）
-                  DropdownMenuItem(
-                    value: 'kling-v1',
-                    child: Text('kling-v1 - std \$0.14 / pro \$0.49'),
+                    child: Text('kling-v2-1-master - \$1.40 (最高质量)'),
                   ),
                 ],
                 onChanged: (value) {
@@ -116,27 +97,25 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               
-              // 生成模式
+              // 生成模式（强制 PRO 模式以支持首尾帧）
               DropdownButtonFormField<String>(
-                value: settings.videoMode,
+                value: settings.videoModel.contains('master') ? 'master' : 'pro',
                 decoration: const InputDecoration(
                   labelText: '生成模式',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.high_quality),
+                  helperText: '使用 PRO/Master 模式启用首尾帧控制',
                 ),
                 items: [
-                  const DropdownMenuItem(
-                    value: 'std',
-                    child: Text('std - 720p'),
-                  ),
-                  const DropdownMenuItem(
-                    value: 'pro',
-                    child: Text('pro - 1080p'),
-                  ),
+                  if (!settings.videoModel.contains('master'))
+                    const DropdownMenuItem(
+                      value: 'pro',
+                      child: Text('pro - 1080p (首尾帧)'),
+                    ),
                   if (settings.videoModel.contains('master'))
                     const DropdownMenuItem(
                       value: 'master',
-                      child: Text('master'),
+                      child: Text('master (最高质量)'),
                     ),
                 ],
                 onChanged: (value) {
@@ -419,18 +398,10 @@ class SettingsScreen extends StatelessWidget {
         unitsPerVideo = settings.videoMode == 'std' ? 2 : 3.5;
         break;
       case 'kling-v2-1-master':
-      case 'kling-v2-master':
         unitsPerVideo = 10;
         break;
-      case 'kling-v1-6':
-      case 'kling-v1-5':
-        unitsPerVideo = settings.videoMode == 'std' ? 2 : 3.5;
-        break;
-      case 'kling-v1':
-        unitsPerVideo = settings.videoMode == 'std' ? 1 : 3.5;
-        break;
       default:
-        unitsPerVideo = 2;
+        unitsPerVideo = 2.5; // PRO 模式默认
     }
     
     // 10秒视频费用翻倍
