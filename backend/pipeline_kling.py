@@ -134,6 +134,9 @@ class KlingPipeline:
 
         # 状态回调（用于更新任务状态）
         self.status_callback = status_callback
+        
+        # 步骤完成回调（用于保存中间结果到数据库）
+        self.step_complete_callback = None
 
         # 宠物配置
         self.breed = ""
@@ -372,6 +375,11 @@ class KlingPipeline:
         }
 
         import shutil
+        
+        def save_step_result(step_name: str, progress: int):
+            """保存步骤结果到数据库"""
+            if self.step_complete_callback:
+                self.step_complete_callback(step_name, progress, results)
 
         # ==================== 步骤1: 保存原图 ====================
         self._update_status(5, "步骤1: 保存原图...", "step1")
@@ -380,6 +388,7 @@ class KlingPipeline:
         shutil.copy(uploaded_image, original_path)
         results["steps"]["original"] = str(original_path)
         print(f"✅ 原图已保存: {original_path}")
+        save_step_result("step1", 5)
 
         self._wait_interval(self.step_interval, "步骤1完成")
 
@@ -398,6 +407,7 @@ class KlingPipeline:
             print(f"✅ 已复制原图到: {transparent_path}")
 
         results["steps"]["transparent"] = str(transparent_path)
+        save_step_result("step2", 10)
 
         self._wait_interval(self.step_interval, "步骤2完成")
 
@@ -406,6 +416,7 @@ class KlingPipeline:
         print("\n🖼️  步骤3: 生成第一张基准图（sit）- 调用可灵API")
         sit_image_raw = self._generate_base_image("sit", str(transparent_path))
         results["steps"]["base_sit_raw"] = sit_image_raw
+        save_step_result("step3", 20)
 
         self._wait_interval(self.step_interval, "步骤3完成")
 
@@ -426,6 +437,7 @@ class KlingPipeline:
 
         sit_image = sit_image_raw  # 最终的sit图片
         results["steps"]["base_sit"] = sit_image
+        save_step_result("step3.5", 25)
 
         self._wait_interval(self.step_interval, "步骤3.5完成")
 
@@ -441,6 +453,7 @@ class KlingPipeline:
         results["steps"]["last_frames"] = last_frames
 
         self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
+        save_step_result("step4", 50)
         self._wait_interval(self.step_interval, "步骤4完成")
 
         # ==================== 步骤5: 生成剩余过渡视频 ====================
@@ -448,6 +461,7 @@ class KlingPipeline:
         print("\n🎬 步骤5: 生成剩余过渡视频")
         remaining_videos = self._generate_remaining_transitions()
         results["steps"]["remaining_transitions"] = remaining_videos
+        save_step_result("step5", 70)
 
         self._wait_interval(self.step_interval, "步骤5完成")
 
@@ -456,6 +470,7 @@ class KlingPipeline:
         print("\n🔄 步骤6: 生成循环视频")
         loop_videos = self._generate_loop_videos()
         results["steps"]["loop_videos"] = loop_videos
+        save_step_result("step6", 85)
 
         self._wait_interval(self.step_interval, "步骤6完成")
 
@@ -464,6 +479,7 @@ class KlingPipeline:
         print("\n🎞️  步骤7: 转换所有视频为GIF")
         gifs = self._convert_all_to_gif()
         results["steps"]["gifs"] = gifs
+        save_step_result("step7", 92)
 
         self._wait_interval(self.step_interval, "步骤7完成")
 
@@ -472,6 +488,7 @@ class KlingPipeline:
         print("\n🎬 步骤8: 拼接所有过渡视频为长视频")
         concatenated_video = self._concatenate_transition_videos()
         results["steps"]["concatenated_video"] = concatenated_video
+        save_step_result("step8", 98)
 
         # 保存元数据
         metadata_path = self.pet_dir / "metadata.json"

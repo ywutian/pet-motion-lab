@@ -659,6 +659,29 @@ def run_pipeline_in_background(
             if step:
                 task_status[pet_id]["current_step"] = step
 
+        # 步骤完成回调函数 - 每一步完成后保存到数据库
+        def step_complete_callback(step_name: str, progress: int, results: dict):
+            """每个步骤完成后保存到数据库"""
+            try:
+                print(f"💾 保存步骤 {step_name} 到数据库 (进度: {progress}%)")
+                # 更新内存中的状态
+                task_status[pet_id]["results"] = results
+                task_status[pet_id]["progress"] = progress
+                task_status[pet_id]["current_step"] = step_name
+                
+                # 同步到数据库
+                db.update_task(
+                    pet_id, 
+                    status='processing',
+                    progress=progress,
+                    message=f'步骤 {step_name} 已完成',
+                    results=results,
+                    current_step=step_name
+                )
+                print(f"✅ 步骤 {step_name} 已保存到数据库")
+            except Exception as e:
+                print(f"⚠️ 保存步骤 {step_name} 到数据库失败: {e}")
+
         # 创建Pipeline实例（带重试和间隔配置）
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
@@ -672,6 +695,9 @@ def run_pipeline_in_background(
             video_access_key=VIDEO_ACCESS_KEY,
             video_secret_key=VIDEO_SECRET_KEY
         )
+        
+        # 设置步骤完成回调
+        pipeline.step_complete_callback = step_complete_callback
 
         # 解析weight为浮点数（用于v3.0智能分析）
         weight_float = 0.0
