@@ -112,9 +112,17 @@ class KlingPipeline:
         step_interval: int = DEFAULT_STEP_INTERVAL,
         api_interval: int = DEFAULT_API_INTERVAL,
         # 状态回调
-        status_callback: Callable = None
+        status_callback: Callable = None,
+        # 视频API凭证（海外版）
+        video_access_key: str = None,
+        video_secret_key: str = None
     ):
-        self.kling = KlingAPI(access_key, secret_key)
+        self.kling = KlingAPI(
+            access_key, 
+            secret_key,
+            video_access_key=video_access_key,
+            video_secret_key=video_secret_key
+        )
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

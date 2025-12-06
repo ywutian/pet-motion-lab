@@ -45,10 +45,19 @@ Railway 会自动检测 `railway.toml` 和 `Dockerfile`，配置如下：
 
 在 Railway 项目设置中添加：
 
-| 变量名 | 值 |
-|--------|-----|
-| `KLING_ACCESS_KEY` | 你的可灵 AI Access Key |
-| `KLING_SECRET_KEY` | 你的可灵 AI Secret Key |
+| 变量名 | 值 | 说明 |
+|--------|-----|------|
+| `KLING_ACCESS_KEY` | 你的可灵 AI Access Key | 图片生成 API（国内版） |
+| `KLING_SECRET_KEY` | 你的可灵 AI Secret Key | 图片生成 API（国内版） |
+| `KLING_VIDEO_ACCESS_KEY` | 你的可灵 AI Access Key | 视频生成 API（海外版） |
+| `KLING_VIDEO_SECRET_KEY` | 你的可灵 AI Secret Key | 视频生成 API（海外版） |
+| `TURSO_DATABASE_URL` | Turso 数据库 URL | 云数据库（可选） |
+| `TURSO_AUTH_TOKEN` | Turso 认证 Token | 云数据库（可选） |
+
+**注意**: 
+- 图片 API 使用国内版可灵（api-beijing.klingai.com）
+- 视频 API 使用海外版可灵（api.klingai.com）
+- 如果不设置视频 API 密钥，将自动使用图片 API 的密钥
 
 点击 **Variables** → **New Variable** 添加。
 

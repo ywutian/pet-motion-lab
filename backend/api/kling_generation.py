@@ -19,7 +19,7 @@ import traceback
 
 from pipeline_kling import KlingPipeline
 from utils.video_utils import extract_first_frame, extract_last_frame
-from config import KLING_ACCESS_KEY, KLING_SECRET_KEY
+from config import KLING_ACCESS_KEY, KLING_SECRET_KEY, KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY
 import database as db  # 导入数据库模块
 
 router = APIRouter(prefix="/api/kling", tags=["kling"])
@@ -27,6 +27,9 @@ router = APIRouter(prefix="/api/kling", tags=["kling"])
 # 可灵AI凭证（从环境变量读取）
 ACCESS_KEY = KLING_ACCESS_KEY
 SECRET_KEY = KLING_SECRET_KEY
+# 视频API凭证（海外版）
+VIDEO_ACCESS_KEY = KLING_VIDEO_ACCESS_KEY
+VIDEO_SECRET_KEY = KLING_VIDEO_SECRET_KEY
 
 # 使用系统临时目录（Render 兼容）
 TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab"
@@ -572,7 +575,9 @@ async def step2_generate_base_image(
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY
         )
 
         # 执行步骤2
@@ -663,7 +668,9 @@ def run_pipeline_in_background(
             retry_delay=BACKGROUND_RETRY_DELAY,
             step_interval=BACKGROUND_STEP_INTERVAL,
             api_interval=BACKGROUND_API_INTERVAL,
-            status_callback=status_callback
+            status_callback=status_callback,
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY
         )
 
         # 解析weight为浮点数（用于v3.0智能分析）
@@ -841,7 +848,9 @@ async def step3_generate_initial_videos(
             pipeline = KlingPipeline(
                 access_key=ACCESS_KEY,
                 secret_key=SECRET_KEY,
-                output_dir="output/kling_pipeline"
+                output_dir="output/kling_pipeline",
+                video_access_key=VIDEO_ACCESS_KEY,
+                video_secret_key=VIDEO_SECRET_KEY
             )
 
             # 执行步骤3
@@ -927,7 +936,9 @@ async def step4_generate_remaining_videos(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY
         )
 
         # 执行步骤4
@@ -977,7 +988,9 @@ async def step5_generate_loop_videos(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY
         )
 
         # 执行步骤5
@@ -1027,7 +1040,9 @@ async def step6_convert_to_gifs(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY
         )
 
         # 收集所有视频
