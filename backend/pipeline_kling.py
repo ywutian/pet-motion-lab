@@ -117,7 +117,7 @@ class KlingPipeline:
         video_access_key: str = None,
         video_secret_key: str = None,
         # 视频生成配置（前端设置）
-        video_model: str = "kling-v2-1-master",
+        video_model: str = "kling-v2-5-turbo",
         video_mode: str = "pro",
         video_duration: int = 5,
         # 背景去除配置（前端设置）

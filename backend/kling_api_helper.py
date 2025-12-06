@@ -269,11 +269,11 @@ class KlingAPI:
         negative_prompt: str = "",
         duration: int = 5,
         aspect_ratio: str = "16:9",
-        model_name: str = "kling-v2-1-master",
+        model_name: str = "kling-v2-5-turbo",
         mode: str = "pro",
     ) -> dict:
         """
-        图生视频API（使用base64编码，kling-v2-1-master大师版模型）
+        图生视频API（使用base64编码）
 
         Args:
             image_path: 输入图片路径
@@ -281,7 +281,7 @@ class KlingAPI:
             negative_prompt: 负向提示词
             duration: 视频时长（秒）
             aspect_ratio: 宽高比
-            model_name: 模型名称，默认 "kling-v2-1-master" (大师版，最高质量)
+            model_name: 模型名称，默认 "kling-v2-5-turbo" (最新，性价比高)
             mode: 生成模式，"std" 标准模式(720p) 或 "pro" 专业模式(1080p)，默认 "pro"
 
         Returns:

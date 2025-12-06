@@ -687,7 +687,7 @@ def run_pipeline_in_background(
     # 默认配置
     if config is None:
         config = {
-            "video_model": "kling-v2-1-master",
+            "video_model": "kling-v2-5-turbo",
             "video_mode": "pro",
             "video_duration": 5,
             "image_removal_method": "removebg",
@@ -750,7 +750,7 @@ def run_pipeline_in_background(
             video_access_key=VIDEO_ACCESS_KEY,
             video_secret_key=VIDEO_SECRET_KEY,
             # 传递前端配置
-            video_model=config.get("video_model", "kling-v2-1-master"),
+            video_model=config.get("video_model", "kling-v2-5-turbo"),
             video_mode=config.get("video_mode", "pro"),
             video_duration=config.get("video_duration", 5),
             image_removal_method=config.get("image_removal_method", "removebg"),
@@ -838,7 +838,7 @@ async def generate_pet_animations(
     weight: str = Form(""),
     birthday: str = Form(""),
     # 视频生成配置（前端设置）
-    video_model: str = Form("kling-v2-1-master"),  # kling-v2-1-master / kling-v2-1
+    video_model: str = Form("kling-v2-5-turbo"),  # kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master
     video_mode: str = Form("pro"),  # pro / std
     video_duration: int = Form(5),  # 5 / 10
     # 背景去除配置
@@ -858,7 +858,7 @@ async def generate_pet_animations(
         species: 物种（猫/犬）
         weight: 重量（可选，如：5kg）
         birthday: 生日（可选，如：2020-01-01）
-        video_model: 视频模型 (kling-v2-1-master / kling-v2-1)
+        video_model: 视频模型 (kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master)
         video_mode: 视频模式 (pro / std)
         video_duration: 视频时长 (5 / 10)
         image_removal_method: 图片去背景方式 (rembg / removebg)

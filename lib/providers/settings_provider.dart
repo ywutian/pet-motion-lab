@@ -11,9 +11,9 @@ class SettingsProvider with ChangeNotifier {
   // ============================================
   // 视频生成配置
   // ============================================
-  String _videoModel = 'kling-v2-1-master'; // kling-v2-1-master / kling-v2-1
-  String _videoMode = 'pro';                 // pro(1080p) / std(720p)
-  int _videoDuration = 5;                    // 5秒 / 10秒
+  String _videoModel = 'kling-v2-5-turbo'; // 默认使用最新最划算的模型
+  String _videoMode = 'std';                // std(720p) 更便宜
+  int _videoDuration = 5;                   // 5秒
 
   // ============================================
   // 背景去除配置 - 图片
@@ -95,8 +95,8 @@ class SettingsProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     
     // 视频生成配置
-    _videoModel = prefs.getString('video_model') ?? 'kling-v2-1-master';
-    _videoMode = prefs.getString('video_mode') ?? 'pro';
+    _videoModel = prefs.getString('video_model') ?? 'kling-v2-5-turbo';
+    _videoMode = prefs.getString('video_mode') ?? 'std';
     _videoDuration = prefs.getInt('video_duration') ?? 5;
     
     // 图片背景去除

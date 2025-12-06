@@ -64,21 +64,53 @@ class SettingsScreen extends StatelessWidget {
                   labelText: '视频模型',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.movie_creation),
-                  helperText: '大师版质量更高，标准版速度更快',
                 ),
+                isExpanded: true,
                 items: const [
+                  // V2.5 Turbo 系列（最新，推荐）
                   DropdownMenuItem(
-                    value: 'kling-v2-1-master',
-                    child: Text('kling-v2-1-master（大师版，推荐）'),
+                    value: 'kling-v2-5-turbo',
+                    child: Text('kling-v2-5-turbo - std \$0.21 / pro \$0.35'),
                   ),
+                  // V2.1 系列
                   DropdownMenuItem(
                     value: 'kling-v2-1',
-                    child: Text('kling-v2-1（标准版，更快）'),
+                    child: Text('kling-v2-1 - std \$0.28 / pro \$0.49'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kling-v2-1-master',
+                    child: Text('kling-v2-1-master - \$1.40'),
+                  ),
+                  // V2 Master 系列
+                  DropdownMenuItem(
+                    value: 'kling-v2-master',
+                    child: Text('kling-v2-master - \$1.40'),
+                  ),
+                  // V1.6 系列
+                  DropdownMenuItem(
+                    value: 'kling-v1-6',
+                    child: Text('kling-v1-6 - std \$0.28 / pro \$0.49'),
+                  ),
+                  // V1.5 系列
+                  DropdownMenuItem(
+                    value: 'kling-v1-5',
+                    child: Text('kling-v1-5 - std \$0.28 / pro \$0.49'),
+                  ),
+                  // V1 系列（最便宜）
+                  DropdownMenuItem(
+                    value: 'kling-v1',
+                    child: Text('kling-v1 - std \$0.14 / pro \$0.49'),
                   ),
                 ],
                 onChanged: (value) {
                   if (value != null) {
                     settings.setVideoModel(value);
+                    // 如果选择 master 模型，自动设置 mode 为 master
+                    if (value.contains('master')) {
+                      settings.setVideoMode('master');
+                    } else if (settings.videoMode == 'master') {
+                      settings.setVideoMode('std');
+                    }
                   }
                 },
               ),
@@ -91,17 +123,21 @@ class SettingsScreen extends StatelessWidget {
                   labelText: '生成模式',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.high_quality),
-                  helperText: 'pro 模式分辨率更高',
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'pro',
-                    child: Text('pro（1080p，高清）'),
-                  ),
-                  DropdownMenuItem(
+                items: [
+                  const DropdownMenuItem(
                     value: 'std',
-                    child: Text('std（720p，标准）'),
+                    child: Text('std - 720p'),
                   ),
+                  const DropdownMenuItem(
+                    value: 'pro',
+                    child: Text('pro - 1080p'),
+                  ),
+                  if (settings.videoModel.contains('master'))
+                    const DropdownMenuItem(
+                      value: 'master',
+                      child: Text('master'),
+                    ),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -118,11 +154,10 @@ class SettingsScreen extends StatelessWidget {
                   labelText: '视频时长',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.timer),
-                  helperText: '每个视频片段的时长',
                 ),
                 items: const [
                   DropdownMenuItem(value: 5, child: Text('5 秒')),
-                  DropdownMenuItem(value: 10, child: Text('10 秒')),
+                  DropdownMenuItem(value: 10, child: Text('10 秒 (×2)')),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -130,6 +165,9 @@ class SettingsScreen extends StatelessWidget {
                   }
                 },
               ),
+              
+              const SizedBox(height: 16),
+              _buildCostEstimate(context, settings),
             ],
           ),
         ),
@@ -363,6 +401,82 @@ class SettingsScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 成本估算
+  Widget _buildCostEstimate(BuildContext context, SettingsProvider settings) {
+    final theme = Theme.of(context);
+    
+    // 计算单个视频的 units
+    double unitsPerVideo;
+    switch (settings.videoModel) {
+      case 'kling-v2-5-turbo':
+        unitsPerVideo = settings.videoMode == 'std' ? 1.5 : 2.5;
+        break;
+      case 'kling-v2-1':
+        unitsPerVideo = settings.videoMode == 'std' ? 2 : 3.5;
+        break;
+      case 'kling-v2-1-master':
+      case 'kling-v2-master':
+        unitsPerVideo = 10;
+        break;
+      case 'kling-v1-6':
+      case 'kling-v1-5':
+        unitsPerVideo = settings.videoMode == 'std' ? 2 : 3.5;
+        break;
+      case 'kling-v1':
+        unitsPerVideo = settings.videoMode == 'std' ? 1 : 3.5;
+        break;
+      default:
+        unitsPerVideo = 2;
+    }
+    
+    // 10秒视频费用翻倍
+    if (settings.videoDuration == 10) {
+      unitsPerVideo *= 2;
+    }
+    
+    // 完整生成需要 16 个视频（12 过渡 + 4 循环）
+    const totalVideos = 16;
+    final totalUnits = unitsPerVideo * totalVideos;
+    final totalCost = totalUnits * 0.14; // 1 unit ≈ $0.14
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calculate, color: theme.colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                '成本估算',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '单个视频: ${unitsPerVideo.toStringAsFixed(1)} units',
+            style: theme.textTheme.bodySmall,
+          ),
+          Text(
+            '完整生成 ($totalVideos 个视频): ${totalUnits.toStringAsFixed(0)} units ≈ \$${totalCost.toStringAsFixed(2)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -615,3 +729,4 @@ class SettingsScreen extends StatelessWidget {
     return EdgeInsets.fromLTRB(horizontal, top, horizontal, bottom);
   }
 }
+
