@@ -22,16 +22,48 @@ LOCAL_DB_PATH = Path("output/pet_motion_lab.db")
 # 是否使用 Turso
 USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
 
+# 启动时打印数据库配置（调试用）
+print(f"🔧 数据库配置检查:")
+print(f"   TURSO_DATABASE_URL: {'已设置 (' + TURSO_DATABASE_URL[:40] + '...)' if TURSO_DATABASE_URL else '❌ 未设置'}")
+print(f"   TURSO_AUTH_TOKEN: {'已设置 (长度: ' + str(len(TURSO_AUTH_TOKEN)) + ')' if TURSO_AUTH_TOKEN else '❌ 未设置'}")
+print(f"   USE_TURSO: {USE_TURSO}")
+
 
 def get_db_connection():
     """获取数据库连接（自动选择 Turso 或本地 SQLite）"""
     if USE_TURSO:
-        import libsql_experimental as libsql
-        conn = libsql.connect(
-            TURSO_DATABASE_URL,
-            auth_token=TURSO_AUTH_TOKEN
-        )
-        print(f"🌐 已连接到 Turso 云数据库")
+        try:
+            import libsql_experimental as libsql
+            print(f"🔗 正在连接 Turso...")
+            print(f"   URL: {TURSO_DATABASE_URL}")
+            
+            # libsql_experimental 的连接方式
+            conn = libsql.connect(
+                database=TURSO_DATABASE_URL,
+                auth_token=TURSO_AUTH_TOKEN
+            )
+            
+            # 测试连接
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            
+            print(f"✅ 已连接到 Turso 云数据库")
+            return conn
+        except ImportError as e:
+            print(f"❌ libsql_experimental 导入失败: {e}")
+            print(f"⚠️ 回退到本地 SQLite 数据库")
+        except Exception as e:
+            print(f"❌ Turso 连接失败: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"⚠️ 回退到本地 SQLite 数据库")
+        
+        # 回退到本地数据库
+        import sqlite3
+        LOCAL_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(LOCAL_DB_PATH), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
         return conn
     else:
         import sqlite3

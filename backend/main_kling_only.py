@@ -72,12 +72,36 @@ async def root():
 async def health_check():
     """健康检查"""
     import sys
+    import os
+    import database as db
+    
+    # 检查数据库状态
+    db_status = "unknown"
+    db_type = "unknown"
+    db_error = None
+    
+    try:
+        # 尝试查询数据库
+        tasks, total = db.get_all_tasks(page=1, page_size=1)
+        db_status = "connected"
+        db_type = "turso" if db.USE_TURSO else "local_sqlite"
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
     
     return {
         "status": "healthy",
         "python_version": sys.version,
         "api_version": "2.0.0",
         "mode": "kling_only",
+        "database": {
+            "status": db_status,
+            "type": db_type,
+            "use_turso": db.USE_TURSO,
+            "turso_url_set": bool(os.environ.get("TURSO_DATABASE_URL")),
+            "turso_token_set": bool(os.environ.get("TURSO_AUTH_TOKEN")),
+            "error": db_error
+        },
         "services": {
             "kling_ai": "available",
             "background_removal": "available",
