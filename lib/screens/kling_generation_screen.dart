@@ -34,6 +34,12 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   bool _isGenerating = false;
   double _progress = 0.0;
   String _statusMessage = '';
+  
+  // 用于取消轮询
+  bool _shouldStopPolling = false;
+  
+  // 正在进行的任务（用于恢复）
+  String? _processingPetId;
 
   @override
   void initState() {
@@ -48,7 +54,143 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       setState(() {
         _species = settings.lastPetSpecies.isEmpty ? '猫' : settings.lastPetSpecies;
       });
+      
+      // 检查是否有正在进行的任务
+      _checkProcessingTask();
     });
+  }
+  
+  /// 检查后端是否有正在进行的任务
+  Future<void> _checkProcessingTask() async {
+    try {
+      final service = KlingGenerationService();
+      final history = await service.getHistory(
+        page: 1,
+        pageSize: 1,
+        statusFilter: 'processing',
+      );
+      
+      final items = history['items'] as List? ?? [];
+      if (items.isNotEmpty && mounted) {
+        final task = items[0];
+        _processingPetId = task['pet_id'];
+        _showResumeDialog(task);
+      }
+    } catch (e) {
+      debugPrint('检查进行中任务失败: $e');
+    }
+  }
+  
+  /// 显示恢复任务对话框
+  void _showResumeDialog(Map<String, dynamic> task) {
+    final breed = task['breed'] ?? '未知';
+    final progress = task['progress'] ?? 0;
+    final message = task['message'] ?? '';
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('发现未完成的任务'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('品种: $breed'),
+            const SizedBox(height: 8),
+            Text('进度: $progress%'),
+            const SizedBox(height: 8),
+            Text('状态: $message', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _processingPetId = null;
+            },
+            child: const Text('忽略，开始新任务'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _resumeTask(task['pet_id']);
+            },
+            child: const Text('继续查看进度'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// 恢复查看任务进度
+  Future<void> _resumeTask(String petId) async {
+    setState(() {
+      _isGenerating = true;
+      _statusMessage = '正在恢复任务...';
+    });
+    
+    try {
+      final service = KlingGenerationService();
+      
+      // 开始轮询状态
+      _shouldStopPolling = false;
+      await for (final status in service.pollStatus(petId)) {
+        if (_shouldStopPolling || !mounted) {
+          debugPrint('🛑 停止轮询: shouldStop=$_shouldStopPolling, mounted=$mounted');
+          break;
+        }
+        
+        setState(() {
+          _progress = status['progress'] / 100.0;
+          _statusMessage = status['message'];
+        });
+
+        if (status['status'] == 'completed') {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => KlingResultScreen(petId: petId),
+              ),
+            );
+          }
+          break;
+        } else if (status['status'] == 'failed') {
+          throw Exception(status['message']);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('恢复任务失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+          _processingPetId = null;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // 停止轮询
+    _shouldStopPolling = true;
+    _breedController.dispose();
+    _colorController.dispose();
+    _weightController.dispose();
+    _birthdayController.dispose();
+    super.dispose();
   }
 
   Future<void> _pickImage() async {
@@ -94,6 +236,10 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
 
     try {
       final service = KlingGenerationService();
+      final settings = Provider.of<SettingsProvider>(context, listen: false);
+
+      // 从设置中获取生成配置
+      final config = GenerationConfig.fromSettings(settings);
 
       // 开始生成（跨平台）
       final petId = await service.startGeneration(
@@ -103,10 +249,18 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         species: _species,
         weight: _weightController.text,
         birthday: _birthdayController.text,
+        config: config,
       );
 
       // 轮询状态
+      _shouldStopPolling = false;
       await for (final status in service.pollStatus(petId)) {
+        // 检查是否应该停止轮询（页面已离开）
+        if (_shouldStopPolling || !mounted) {
+          debugPrint('🛑 停止轮询: shouldStop=$_shouldStopPolling, mounted=$mounted');
+          break;
+        }
+        
         setState(() {
           _progress = status['progress'] / 100.0;
           _statusMessage = status['message'];

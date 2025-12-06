@@ -224,7 +224,8 @@ class _HistoryCard extends StatelessWidget {
             // 预览图
             Stack(
               children: [
-                if (thumbnailUrl != null)
+                // 只有在文件可用且不是处理中时才加载图片
+                if (thumbnailUrl != null && filesAvailable && status != 'processing')
                   AspectRatio(
                     aspectRatio: 16 / 9,
                     child: Container(
@@ -240,7 +241,19 @@ class _HistoryCard extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.pets, size: 48),
+                          Icon(
+                            status == 'processing' ? Icons.hourglass_top : Icons.pets,
+                            size: 48,
+                            color: status == 'processing' ? Colors.orange : null,
+                          ),
+                          if (status == 'processing')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '生成中 $progress%',
+                                style: const TextStyle(color: Colors.orange, fontSize: 12),
+                              ),
+                            ),
                           if (!filesAvailable && status == 'completed')
                             Padding(
                               padding: const EdgeInsets.only(top: 8),

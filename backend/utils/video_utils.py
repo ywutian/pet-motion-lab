@@ -6,9 +6,20 @@
 
 import cv2
 import os
+import io
+import requests
 from pathlib import Path
 from PIL import Image
 import numpy as np
+
+# 尝试导入 rembg（可选依赖）
+try:
+    from rembg import remove as rembg_remove
+    from rembg import new_session
+    REMBG_AVAILABLE = True
+except ImportError:
+    REMBG_AVAILABLE = False
+    print("⚠️ rembg 未安装，本地去背景功能不可用")
 
 
 def extract_frame(video_path: str, frame_index: int = -1, output_path: str = None) -> np.ndarray:
@@ -355,6 +366,301 @@ def concatenate_videos(
     print(f"   总视频数: {len(video_paths)}")
     print(f"   总帧数: {total_frames}")
     print(f"   输出尺寸: {width}x{height}, FPS: {fps:.2f}")
+    
+    return output_path
+
+
+def remove_background_from_image(
+    image: Image.Image,
+    method: str = "rembg",
+    rembg_model: str = "u2net",
+    removebg_api_key: str = None,
+    rembg_session = None
+) -> Image.Image:
+    """
+    从单张图片中去除背景
+    
+    Args:
+        image: PIL Image 对象
+        method: 去除方式 ("rembg" 或 "removebg")
+        rembg_model: rembg 模型名称
+        removebg_api_key: Remove.bg API Key
+        rembg_session: rembg session（可选，复用以提高性能）
+    
+    Returns:
+        去除背景后的 PIL Image（RGBA）
+    """
+    if method == "rembg":
+        if not REMBG_AVAILABLE:
+            raise RuntimeError("rembg 未安装，请运行 pip install rembg")
+        
+        # 使用传入的 session 或创建新的
+        if rembg_session:
+            result = rembg_remove(image, session=rembg_session)
+        else:
+            session = new_session(rembg_model)
+            result = rembg_remove(image, session=session)
+        
+        return result
+    
+    elif method == "removebg":
+        if not removebg_api_key:
+            raise ValueError("使用 Remove.bg API 需要提供 API Key")
+        
+        # 将图片转换为字节
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        # 调用 Remove.bg API
+        response = requests.post(
+            'https://api.remove.bg/v1.0/removebg',
+            files={'image_file': img_byte_arr},
+            data={'size': 'auto'},
+            headers={'X-Api-Key': removebg_api_key},
+        )
+        
+        if response.status_code == 200:
+            return Image.open(io.BytesIO(response.content)).convert('RGBA')
+        else:
+            raise RuntimeError(f"Remove.bg API 错误: {response.status_code} - {response.text}")
+    
+    else:
+        raise ValueError(f"不支持的去背景方式: {method}")
+
+
+def convert_mp4_to_transparent_gif(
+    input_path: str,
+    output_path: str,
+    method: str = "rembg",
+    rembg_model: str = "u2net",
+    removebg_api_key: str = None,
+    fps_reduction: int = 2,
+    max_width: int = 480,
+    status_callback = None
+) -> str:
+    """
+    将MP4转换为透明背景GIF（逐帧去背景）
+    
+    Args:
+        input_path: 输入MP4路径
+        output_path: 输出GIF路径
+        method: 去背景方式 ("rembg" 或 "removebg")
+        rembg_model: rembg 模型名称
+        removebg_api_key: Remove.bg API Key
+        fps_reduction: 帧率缩减倍数
+        max_width: GIF最大宽度
+        status_callback: 状态回调函数 (progress, message)
+    
+    Returns:
+        输出GIF路径
+    """
+    cap = cv2.VideoCapture(input_path)
+    
+    if not cap.isOpened():
+        raise Exception(f"无法打开视频: {input_path}")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    # 计算需要处理的帧数
+    frames_to_process = total_frames // fps_reduction
+    
+    # 计算缩放
+    if width > max_width:
+        scale_factor = max_width / width
+        new_width = max_width
+        new_height = int(height * scale_factor)
+    else:
+        new_width = width
+        new_height = height
+        scale_factor = 1.0
+    
+    # 创建 rembg session（复用以提高性能）
+    rembg_session = None
+    if method == "rembg" and REMBG_AVAILABLE:
+        print(f"📦 加载 rembg 模型: {rembg_model}")
+        rembg_session = new_session(rembg_model)
+    
+    # 读取并处理帧
+    frames = []
+    frame_count = 0
+    processed_count = 0
+    
+    print(f"🎬 开始处理视频: {Path(input_path).name}")
+    print(f"   总帧数: {total_frames}, 预计处理: {frames_to_process} 帧")
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # 跳帧
+        if frame_count % fps_reduction == 0:
+            # BGR转RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # 缩放
+            if scale_factor != 1.0:
+                frame_rgb = cv2.resize(frame_rgb, (new_width, new_height))
+            
+            # 转PIL Image
+            pil_image = Image.fromarray(frame_rgb)
+            
+            # 去除背景
+            try:
+                transparent_image = remove_background_from_image(
+                    pil_image,
+                    method=method,
+                    rembg_model=rembg_model,
+                    removebg_api_key=removebg_api_key,
+                    rembg_session=rembg_session
+                )
+                frames.append(transparent_image)
+                processed_count += 1
+                
+                # 进度回调
+                if status_callback and frames_to_process > 0:
+                    progress = int((processed_count / frames_to_process) * 100)
+                    status_callback(progress, f"处理帧 {processed_count}/{frames_to_process}")
+                
+                if processed_count % 10 == 0:
+                    print(f"   ✅ 已处理 {processed_count}/{frames_to_process} 帧")
+                    
+            except Exception as e:
+                print(f"   ⚠️ 帧 {processed_count} 去背景失败: {e}")
+                # 失败时使用原图
+                frames.append(pil_image.convert('RGBA'))
+                processed_count += 1
+        
+        frame_count += 1
+    
+    cap.release()
+    
+    if not frames:
+        raise Exception("没有读取到任何帧")
+    
+    # 计算GIF帧间隔
+    gif_fps = fps / fps_reduction
+    frame_duration = int(1000 / gif_fps)
+    
+    # 保存透明GIF
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"💾 保存透明GIF...")
+    
+    # 使用 dispose=2 确保透明度正确
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=frame_duration,
+        loop=0,
+        optimize=False,  # 透明GIF不优化以保持质量
+        disposal=2,  # 每帧清除前一帧
+        transparency=0
+    )
+    
+    print(f"✅ 透明GIF已保存: {output_path}")
+    print(f"   处理帧数: {len(frames)}")
+    
+    return output_path
+
+
+def convert_gif_to_transparent_gif(
+    input_path: str,
+    output_path: str,
+    method: str = "rembg",
+    rembg_model: str = "u2net",
+    removebg_api_key: str = None,
+    status_callback = None
+) -> str:
+    """
+    将普通GIF转换为透明背景GIF（逐帧去背景）
+    
+    Args:
+        input_path: 输入GIF路径
+        output_path: 输出GIF路径
+        method: 去背景方式 ("rembg" 或 "removebg")
+        rembg_model: rembg 模型名称
+        removebg_api_key: Remove.bg API Key
+        status_callback: 状态回调函数 (progress, message)
+    
+    Returns:
+        输出GIF路径
+    """
+    # 打开GIF
+    gif = Image.open(input_path)
+    
+    # 获取帧数和时长
+    try:
+        n_frames = gif.n_frames
+    except AttributeError:
+        n_frames = 1
+    
+    duration = gif.info.get('duration', 100)
+    
+    print(f"🎬 开始处理GIF: {Path(input_path).name}")
+    print(f"   总帧数: {n_frames}")
+    
+    # 创建 rembg session
+    rembg_session = None
+    if method == "rembg" and REMBG_AVAILABLE:
+        print(f"📦 加载 rembg 模型: {rembg_model}")
+        rembg_session = new_session(rembg_model)
+    
+    # 处理每一帧
+    frames = []
+    
+    for i in range(n_frames):
+        gif.seek(i)
+        frame = gif.convert('RGB')
+        
+        try:
+            transparent_frame = remove_background_from_image(
+                frame,
+                method=method,
+                rembg_model=rembg_model,
+                removebg_api_key=removebg_api_key,
+                rembg_session=rembg_session
+            )
+            frames.append(transparent_frame)
+            
+            # 进度回调
+            if status_callback:
+                progress = int(((i + 1) / n_frames) * 100)
+                status_callback(progress, f"处理帧 {i + 1}/{n_frames}")
+            
+            if (i + 1) % 10 == 0:
+                print(f"   ✅ 已处理 {i + 1}/{n_frames} 帧")
+                
+        except Exception as e:
+            print(f"   ⚠️ 帧 {i + 1} 去背景失败: {e}")
+            frames.append(frame.convert('RGBA'))
+    
+    if not frames:
+        raise Exception("没有处理到任何帧")
+    
+    # 保存透明GIF
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"💾 保存透明GIF...")
+    
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=duration,
+        loop=0,
+        optimize=False,
+        disposal=2,
+        transparency=0
+    )
+    
+    print(f"✅ 透明GIF已保存: {output_path}")
+    print(f"   处理帧数: {len(frames)}")
     
     return output_path
 

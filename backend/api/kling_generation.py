@@ -18,9 +18,13 @@ import threading
 import traceback
 
 from pipeline_kling import KlingPipeline
-from utils.video_utils import extract_first_frame, extract_last_frame
-from config import KLING_ACCESS_KEY, KLING_SECRET_KEY, KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY
+from utils.video_utils import (
+    extract_first_frame, extract_last_frame,
+    convert_gif_to_transparent_gif, convert_mp4_to_transparent_gif
+)
+from config import KLING_ACCESS_KEY, KLING_SECRET_KEY, KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY, REMOVE_BG_API_KEY
 import database as db  # 导入数据库模块
+import json
 
 router = APIRouter(prefix="/api/kling", tags=["kling"])
 
@@ -659,7 +663,8 @@ def run_pipeline_in_background(
     color: str,
     species: str,
     weight: str = "",
-    birthday: str = ""
+    birthday: str = "",
+    config: dict = None
 ):
     """
     在后台线程中执行完整的生成流程
@@ -677,11 +682,26 @@ def run_pipeline_in_background(
         species: 物种
         weight: 重量
         birthday: 生日
+        config: 生成配置（视频模型、模式、时长、背景去除等）
     """
+    # 默认配置
+    if config is None:
+        config = {
+            "video_model": "kling-v2-1-master",
+            "video_mode": "pro",
+            "video_duration": 5,
+            "image_removal_method": "removebg",
+            "image_rembg_model": "u2net",
+            "gif_removal_enabled": False,
+            "gif_removal_method": "rembg",
+            "gif_rembg_model": "u2net",
+        }
     try:
         print(f"\n{'='*70}")
         print(f"🚀 后台任务启动: {pet_id}")
         print(f"📋 品种: {breed}, 颜色: {color}, 物种: {species}")
+        print(f"🎬 视频配置: 模型={config['video_model']}, 模式={config['video_mode']}, 时长={config['video_duration']}s")
+        print(f"✂️ 背景去除: 图片={config['image_removal_method']}, GIF启用={config['gif_removal_enabled']}")
         print(f"🔧 重试: {BACKGROUND_MAX_RETRIES}次, 间隔: {BACKGROUND_RETRY_DELAY}s")
         print(f"⏳ 步骤间隔: {BACKGROUND_STEP_INTERVAL}s, API间隔: {BACKGROUND_API_INTERVAL}s")
         print(f"{'='*70}\n")
@@ -728,7 +748,16 @@ def run_pipeline_in_background(
             api_interval=BACKGROUND_API_INTERVAL,
             status_callback=status_callback,
             video_access_key=VIDEO_ACCESS_KEY,
-            video_secret_key=VIDEO_SECRET_KEY
+            video_secret_key=VIDEO_SECRET_KEY,
+            # 传递前端配置
+            video_model=config.get("video_model", "kling-v2-1-master"),
+            video_mode=config.get("video_mode", "pro"),
+            video_duration=config.get("video_duration", 5),
+            image_removal_method=config.get("image_removal_method", "removebg"),
+            image_rembg_model=config.get("image_rembg_model", "u2net"),
+            gif_removal_enabled=config.get("gif_removal_enabled", False),
+            gif_removal_method=config.get("gif_removal_method", "rembg"),
+            gif_rembg_model=config.get("gif_rembg_model", "u2net"),
         )
         
         # 设置步骤完成回调
@@ -807,7 +836,17 @@ async def generate_pet_animations(
     color: str = Form(...),
     species: str = Form(...),
     weight: str = Form(""),
-    birthday: str = Form("")
+    birthday: str = Form(""),
+    # 视频生成配置（前端设置）
+    video_model: str = Form("kling-v2-1-master"),  # kling-v2-1-master / kling-v2-1
+    video_mode: str = Form("pro"),  # pro / std
+    video_duration: int = Form(5),  # 5 / 10
+    # 背景去除配置
+    image_removal_method: str = Form("removebg"),  # rembg / removebg
+    image_rembg_model: str = Form("u2net"),
+    gif_removal_enabled: bool = Form(False),
+    gif_removal_method: str = Form("rembg"),
+    gif_rembg_model: str = Form("u2net"),
 ):
     """
     生成宠物动画完整流程（后台执行，立即返回）
@@ -819,6 +858,14 @@ async def generate_pet_animations(
         species: 物种（猫/犬）
         weight: 重量（可选，如：5kg）
         birthday: 生日（可选，如：2020-01-01）
+        video_model: 视频模型 (kling-v2-1-master / kling-v2-1)
+        video_mode: 视频模式 (pro / std)
+        video_duration: 视频时长 (5 / 10)
+        image_removal_method: 图片去背景方式 (rembg / removebg)
+        image_rembg_model: 图片 rembg 模型
+        gif_removal_enabled: 是否启用 GIF 去背景
+        gif_removal_method: GIF 去背景方式
+        gif_rembg_model: GIF rembg 模型
 
     Returns:
         任务ID和初始状态（任务在后台执行）
@@ -831,6 +878,18 @@ async def generate_pet_animations(
     with open(upload_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # 生成配置
+    generation_config = {
+        "video_model": video_model,
+        "video_mode": video_mode,
+        "video_duration": video_duration,
+        "image_removal_method": image_removal_method,
+        "image_rembg_model": image_rembg_model,
+        "gif_removal_enabled": gif_removal_enabled,
+        "gif_removal_method": gif_removal_method,
+        "gif_rembg_model": gif_rembg_model,
+    }
+
     # 初始化任务状态（同时保存到内存和数据库）
     task_status[pet_id] = {
         "status": "processing",
@@ -842,6 +901,7 @@ async def generate_pet_animations(
         "species": species,
         "weight": weight,
         "birthday": birthday,
+        "config": generation_config,  # 保存配置
         "results": None,
         "error": None,
         "started_at": time.time()
@@ -850,12 +910,13 @@ async def generate_pet_animations(
     # 持久化到数据库
     db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
                    weight=weight, birthday=birthday)
-    db.update_task(pet_id, status='processing', started_at=time.time())
+    db.update_task(pet_id, status='processing', started_at=time.time(),
+                   metadata=generation_config)  # 保存配置到数据库
 
     # 启动后台线程执行生成流程
     thread = threading.Thread(
         target=run_pipeline_in_background,
-        args=(pet_id, str(upload_path), breed, color, species, weight, birthday),
+        args=(pet_id, str(upload_path), breed, color, species, weight, birthday, generation_config),
         daemon=True  # 守护线程，主进程退出时自动结束
     )
     thread.start()
@@ -1537,6 +1598,163 @@ async def download_all_as_zip(pet_id: str, include: str = "gifs"):
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+
+
+# ============================================
+# GIF 去背景 API
+# ============================================
+
+@router.post("/remove-gif-background")
+async def remove_gif_background(
+    file: UploadFile = File(...),
+    method: str = Form("rembg"),  # rembg / removebg
+    rembg_model: str = Form("u2net"),  # u2net / u2net_p / silueta 等
+):
+    """
+    去除 GIF 的背景（逐帧处理）
+    
+    Args:
+        file: 上传的 GIF 文件
+        method: 去背景方式 (rembg / removebg)
+        rembg_model: rembg 模型（仅当 method=rembg 时有效）
+    
+    Returns:
+        透明背景 GIF 的下载链接
+    """
+    try:
+        print(f"\n🎨 GIF 去背景: filename={file.filename}, method={method}")
+        
+        # 保存上传的 GIF
+        gif_filename = f"gif_{int(time.time())}_{file.filename}"
+        gif_path = UPLOAD_DIR / gif_filename
+        
+        with open(gif_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        print(f"✅ GIF 已保存: {gif_path}")
+        
+        # 创建输出目录
+        output_dir = TEMP_DIR / "transparent_gifs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 输出文件名
+        output_filename = f"transparent_{gif_filename}"
+        output_path = str(output_dir / output_filename)
+        
+        # 调用去背景函数
+        removebg_api_key = REMOVE_BG_API_KEY if method == "removebg" else None
+        
+        result_path = convert_gif_to_transparent_gif(
+            input_path=str(gif_path),
+            output_path=output_path,
+            method=method,
+            rembg_model=rembg_model,
+            removebg_api_key=removebg_api_key
+        )
+        
+        # 删除临时输入文件
+        gif_path.unlink()
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "GIF 背景去除完成",
+            "output_path": result_path,
+            "download_url": f"/api/kling/download-transparent-gif/{output_filename}"
+        })
+        
+    except Exception as e:
+        print(f"❌ GIF 去背景失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"GIF 去背景失败: {str(e)}")
+
+
+@router.get("/download-transparent-gif/{filename}")
+async def download_transparent_gif(filename: str):
+    """
+    下载透明背景 GIF
+    """
+    file_path = TEMP_DIR / "transparent_gifs" / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    return FileResponse(
+        path=str(file_path),
+        media_type="image/gif",
+        filename=filename
+    )
+
+
+@router.post("/remove-video-background")
+async def remove_video_background(
+    file: UploadFile = File(...),
+    method: str = Form("rembg"),
+    rembg_model: str = Form("u2net"),
+    fps_reduction: int = Form(2),
+    max_width: int = Form(480),
+):
+    """
+    将视频转换为透明背景 GIF（逐帧去背景）
+    
+    Args:
+        file: 上传的视频文件
+        method: 去背景方式 (rembg / removebg)
+        rembg_model: rembg 模型
+        fps_reduction: 帧率缩减倍数
+        max_width: GIF 最大宽度
+    
+    Returns:
+        透明背景 GIF 的下载链接
+    """
+    try:
+        print(f"\n🎬 视频转透明 GIF: filename={file.filename}, method={method}")
+        
+        # 保存上传的视频
+        video_filename = f"video_{int(time.time())}_{file.filename}"
+        video_path = UPLOAD_DIR / video_filename
+        
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        print(f"✅ 视频已保存: {video_path}")
+        
+        # 创建输出目录
+        output_dir = TEMP_DIR / "transparent_gifs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 输出文件名
+        output_filename = f"transparent_{Path(video_filename).stem}.gif"
+        output_path = str(output_dir / output_filename)
+        
+        # 调用去背景函数
+        removebg_api_key = REMOVE_BG_API_KEY if method == "removebg" else None
+        
+        result_path = convert_mp4_to_transparent_gif(
+            input_path=str(video_path),
+            output_path=output_path,
+            method=method,
+            rembg_model=rembg_model,
+            removebg_api_key=removebg_api_key,
+            fps_reduction=fps_reduction,
+            max_width=max_width
+        )
+        
+        # 删除临时输入文件
+        video_path.unlink()
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "视频转透明 GIF 完成",
+            "output_path": result_path,
+            "download_url": f"/api/kling/download-transparent-gif/{output_filename}"
+        })
+        
+    except Exception as e:
+        print(f"❌ 视频转透明 GIF 失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"视频转透明 GIF 失败: {str(e)}")
 
 
 @router.post("/extract-frames")

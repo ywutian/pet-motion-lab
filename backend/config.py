@@ -37,3 +37,13 @@ if os.getenv("KLING_VIDEO_ACCESS_KEY") and os.getenv("KLING_VIDEO_SECRET_KEY"):
 else:
     print(f"ℹ️ 视频API将使用图片API的密钥")
 
+# ============================================
+# Remove.bg API 配置
+# ============================================
+REMOVE_BG_API_KEY = os.getenv("REMOVE_BG_API_KEY", "")
+
+if REMOVE_BG_API_KEY:
+    print(f"✅ Remove.bg API密钥已配置")
+else:
+    print(f"ℹ️ 未设置 Remove.bg API密钥，将使用本地 rembg")
+

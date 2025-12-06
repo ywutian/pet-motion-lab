@@ -4,6 +4,46 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/cross_platform_file.dart';
+import '../providers/settings_provider.dart';
+
+/// 生成配置（从 SettingsProvider 获取）
+class GenerationConfig {
+  final String videoModel;
+  final String videoMode;
+  final int videoDuration;
+  final String imageRemovalMethod;
+  final String imageRembgModel;
+  final bool gifRemovalEnabled;
+  final String gifRemovalMethod;
+  final String gifRembgModel;
+
+  const GenerationConfig({
+    this.videoModel = 'kling-v2-1-master',
+    this.videoMode = 'pro',
+    this.videoDuration = 5,
+    this.imageRemovalMethod = 'removebg',
+    this.imageRembgModel = 'u2net',
+    this.gifRemovalEnabled = false,
+    this.gifRemovalMethod = 'rembg',
+    this.gifRembgModel = 'u2net',
+  });
+
+  /// 从 SettingsProvider 创建配置
+  factory GenerationConfig.fromSettings(SettingsProvider settings) {
+    return GenerationConfig(
+      videoModel: settings.videoModel,
+      videoMode: settings.videoMode,
+      videoDuration: settings.videoDuration,
+      imageRemovalMethod: settings.imageRemovalMethod == BackgroundRemovalMethod.rembg 
+          ? 'rembg' : 'removebg',
+      imageRembgModel: settings.imageRembgModel,
+      gifRemovalEnabled: settings.gifRemovalEnabled,
+      gifRemovalMethod: settings.gifRemovalMethod == BackgroundRemovalMethod.rembg 
+          ? 'rembg' : 'removebg',
+      gifRembgModel: settings.gifRembgModel,
+    );
+  }
+}
 
 class KlingGenerationService {
   // 使用统一的 API 配置
@@ -17,6 +57,7 @@ class KlingGenerationService {
     required String species,
     String? weight,
     String? birthday,
+    GenerationConfig? config,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/kling/generate');
@@ -32,6 +73,17 @@ class KlingGenerationService {
       if (birthday != null && birthday.isNotEmpty) {
         request.fields['birthday'] = birthday;
       }
+
+      // 添加生成配置
+      final cfg = config ?? const GenerationConfig();
+      request.fields['video_model'] = cfg.videoModel;
+      request.fields['video_mode'] = cfg.videoMode;
+      request.fields['video_duration'] = cfg.videoDuration.toString();
+      request.fields['image_removal_method'] = cfg.imageRemovalMethod;
+      request.fields['image_rembg_model'] = cfg.imageRembgModel;
+      request.fields['gif_removal_enabled'] = cfg.gifRemovalEnabled.toString();
+      request.fields['gif_removal_method'] = cfg.gifRemovalMethod;
+      request.fields['gif_rembg_model'] = cfg.gifRembgModel;
 
       // 跨平台文件上传
       if (imageFile.bytes != null) {
@@ -49,6 +101,7 @@ class KlingGenerationService {
       }
 
       print('📤 发送请求...');
+      print('🎬 配置: 模型=${cfg.videoModel}, 模式=${cfg.videoMode}, 时长=${cfg.videoDuration}s');
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
@@ -77,6 +130,7 @@ class KlingGenerationService {
     required String species,
     String? weight,
     String? birthday,
+    GenerationConfig? config,
   }) async {
     return startGeneration(
       imageFile: CrossPlatformFile(
@@ -88,6 +142,7 @@ class KlingGenerationService {
       species: species,
       weight: weight,
       birthday: birthday,
+      config: config,
     );
   }
 

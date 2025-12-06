@@ -115,7 +115,17 @@ class KlingPipeline:
         status_callback: Callable = None,
         # 视频API凭证（海外版）
         video_access_key: str = None,
-        video_secret_key: str = None
+        video_secret_key: str = None,
+        # 视频生成配置（前端设置）
+        video_model: str = "kling-v2-1-master",
+        video_mode: str = "pro",
+        video_duration: int = 5,
+        # 背景去除配置（前端设置）
+        image_removal_method: str = "removebg",
+        image_rembg_model: str = "u2net",
+        gif_removal_enabled: bool = False,
+        gif_removal_method: str = "rembg",
+        gif_rembg_model: str = "u2net",
     ):
         self.kling = KlingAPI(
             access_key, 
@@ -137,6 +147,18 @@ class KlingPipeline:
         
         # 步骤完成回调（用于保存中间结果到数据库）
         self.step_complete_callback = None
+
+        # 视频生成配置
+        self.video_model = video_model
+        self.video_mode = video_mode
+        self.video_duration = video_duration
+
+        # 背景去除配置
+        self.image_removal_method = image_removal_method
+        self.image_rembg_model = image_rembg_model
+        self.gif_removal_enabled = gif_removal_enabled
+        self.gif_removal_method = gif_removal_method
+        self.gif_rembg_model = gif_rembg_model
 
         # 宠物配置
         self.breed = ""
@@ -420,23 +442,29 @@ class KlingPipeline:
 
         self._wait_interval(self.step_interval, "步骤3完成")
 
-        # ==================== 步骤3.5: 去背景（生成后）====================
-        self._update_status(25, "步骤3.5: 去除生成图片背景（第2次）...", "step3.5")
-        print("\n🎨 步骤3.5: 去除sit图片的背景")
-        sit_image_clean = str(self.images_dir / "sit_clean.png")
+        # ==================== 步骤3.5: 保存透明背景版本（可选）====================
+        self._update_status(25, "步骤3.5: 处理图片背景...", "step3.5")
+        print("\n🎨 步骤3.5: 处理sit图片背景")
+        
+        # 保留原始白底版本用于视频生成（避免可灵自动加背景导致不一致）
+        sit_image_with_bg = sit_image_raw  # 白底版本，用于生成视频
+        sit_image_transparent = str(self.images_dir / "sit_transparent.png")
 
         if remove_background_flag:
-            # 背景去除（不需要重试，Remove.bg API很稳定）
-            remove_background(sit_image_raw, sit_image_clean)
-            print(f"✅ sit图片背景已去除: {sit_image_clean}")
-            # 覆盖原sit.png
-            shutil.copy(sit_image_clean, sit_image_raw)
-            print(f"✅ 已更新sit.png为去背景版本")
+            # 生成透明背景版本（保存为单独文件，不覆盖原图）
+            remove_background(sit_image_raw, sit_image_transparent)
+            print(f"✅ 透明背景版本已保存: {sit_image_transparent}")
+            print(f"📌 视频生成将使用白底版本: {sit_image_with_bg}")
+            print(f"   （避免可灵自动加背景导致颜色不一致）")
         else:
-            print(f"⚠️  跳过sit图片背景去除")
+            print(f"⚠️  跳过背景去除")
+            # 复制一份作为透明版本（实际上还是有背景）
+            shutil.copy(sit_image_raw, sit_image_transparent)
 
-        sit_image = sit_image_raw  # 最终的sit图片
+        # 用于视频生成的是白底版本
+        sit_image = sit_image_with_bg
         results["steps"]["base_sit"] = sit_image
+        results["steps"]["base_sit_transparent"] = sit_image_transparent
         save_step_result("step3.5", 25)
 
         self._wait_interval(self.step_interval, "步骤3.5完成")
@@ -446,6 +474,7 @@ class KlingPipeline:
         print("\n🎬 步骤4: 生成前3个过渡视频 + 提取首尾帧")
         print("  📌 视频: sit→walk, sit→rest, rest→sleep")
         print("  📌 提取尾帧作为其他姿势基础图: walk.png, rest.png, sleep.png")
+        print(f"  📌 使用白底图片: {sit_image}")
         first_videos, other_poses, first_frames, last_frames = self._generate_first_transitions(sit_image)
         results["steps"]["first_transitions"] = first_videos
         results["steps"]["other_base_images"] = other_poses
