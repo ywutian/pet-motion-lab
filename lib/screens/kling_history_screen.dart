@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -223,16 +224,7 @@ class _HistoryCard extends StatelessWidget {
                 aspectRatio: 16 / 9,
                 child: Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: CachedNetworkImage(
-                    imageUrl: '${ApiConfig.baseUrl}$thumbnailUrl',
-                    fit: BoxFit.contain, // 完整显示图片
-                    placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                    errorWidget: (context, url, error) => const Center(
-                      child: Icon(Icons.pets, size: 48),
-                    ),
-                  ),
+                  child: _buildNetworkImage('${ApiConfig.baseUrl}$thumbnailUrl'),
                 ),
               )
             else
@@ -382,6 +374,37 @@ class _HistoryCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 构建网络图片，Web 端使用 Image.network，其他平台使用 CachedNetworkImage
+  Widget _buildNetworkImage(String imageUrl) {
+    if (kIsWeb) {
+      // Web 端使用 Image.network 避免 CanvasKit 纹理问题
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Image load error: $error');
+          return const Center(child: Icon(Icons.pets, size: 48));
+        },
+      );
+    } else {
+      // 非 Web 端使用 CachedNetworkImage
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.pets, size: 48),
+        ),
+      );
+    }
   }
 }
 

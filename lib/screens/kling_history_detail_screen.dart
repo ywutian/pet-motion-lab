@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -312,7 +313,7 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+            _buildNetworkImage(url),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: TextButton(
@@ -324,6 +325,35 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
         ),
       ),
     );
+  }
+
+  /// 构建网络图片，Web 端使用 Image.network，其他平台使用 CachedNetworkImage
+  Widget _buildNetworkImage(String imageUrl) {
+    if (kIsWeb) {
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Image load error: $error');
+          return const Center(child: Icon(Icons.error, size: 48));
+        },
+      );
+    } else {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.error, size: 48),
+        ),
+      );
+    }
   }
 
   Future<void> _openUrl(String url) async {
@@ -365,16 +395,7 @@ class _MediaCard extends StatelessWidget {
             Expanded(
               child: Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain, // 完整显示图片
-                  placeholder: (context, url) => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                  errorWidget: (context, url, error) => const Center(
-                    child: Icon(Icons.error),
-                  ),
-                ),
+                child: _buildImage(context),
               ),
             ),
             Padding(
@@ -397,6 +418,33 @@ class _MediaCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildImage(BuildContext context) {
+    if (kIsWeb) {
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(child: Icon(Icons.error));
+        },
+      );
+    } else {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.error),
+        ),
+      );
+    }
   }
 }
 
