@@ -212,6 +212,10 @@ class _HistoryCard extends StatelessWidget {
     final progress = item['progress'] ?? 0;
     final currentStep = item['current_step'] ?? '';
     final filesAvailable = item['files_available'] ?? false;
+    final modelConfig = item['model_config'] ?? {};
+    final videoModel = modelConfig['video_model'] ?? '未知';
+    final videoMode = modelConfig['video_mode'] ?? '未知';
+    final videoDuration = modelConfig['video_duration'] ?? 5;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -329,6 +333,51 @@ class _HistoryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
+                  // 模型配置信息
+                  if (videoModel != '未知') ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.smart_toy, size: 14, color: Colors.purple),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatModelName(videoModel),
+                            style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: videoMode == 'pro' ? Colors.amber.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              videoMode.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: videoMode == 'pro' ? Colors.amber[800] : Colors.grey[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${videoDuration}s',
+                            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   // 统计信息
                   Wrap(
                     spacing: 8,
@@ -369,6 +418,22 @@ class _HistoryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatModelName(String model) {
+    // 简化模型名称显示
+    switch (model) {
+      case 'kling-v2-5-turbo':
+        return 'V2.5 Turbo';
+      case 'kling-v2-1':
+        return 'V2.1';
+      case 'kling-v2-1-master':
+        return 'V2.1 Master';
+      case 'kling-v1':
+        return 'V1';
+      default:
+        return model.replaceAll('kling-', '').toUpperCase();
+    }
   }
 
   Widget _buildStatusBadge(BuildContext context, String status, [int progress = 0]) {

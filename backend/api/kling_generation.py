@@ -102,6 +102,9 @@ async def get_generation_history(
         
         created_at = task.get('started_at', time.time())
         
+        # 获取模型配置
+        config = task.get("config", {})
+        
         history_item = {
             "pet_id": pet_id,
             "breed": task.get("breed", "未知"),
@@ -114,6 +117,12 @@ async def get_generation_history(
             "created_at": created_at,
             "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
             "files_available": dir_exists,
+            # 模型配置（用于比较）
+            "model_config": {
+                "video_model": config.get("video_model", "未知"),
+                "video_mode": config.get("video_mode", "未知"),
+                "video_duration": config.get("video_duration", 5),
+            },
             "preview": {
                 "thumbnail": f"/api/kling/download/{pet_id}/base_images/sit.png" if has_sit else None,
                 "transparent": f"/api/kling/download/{pet_id}/transparent.png" if has_transparent else None,
@@ -185,6 +194,12 @@ async def get_generation_history(
                 "created_at": created_at,
                 "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
                 "files_available": True,
+                # 模型配置（从 metadata.json 读取）
+                "model_config": {
+                    "video_model": metadata.get("video_model", "未知"),
+                    "video_mode": metadata.get("video_mode", "未知"),
+                    "video_duration": metadata.get("video_duration", 5),
+                },
                 "preview": {
                     "thumbnail": f"/api/kling/download/{pet_id}/base_images/sit.png" if has_sit else None,
                     "transparent": f"/api/kling/download/{pet_id}/transparent.png" if has_transparent else None,
@@ -787,6 +802,10 @@ def run_pipeline_in_background(
             "created_at": task_status[pet_id].get("started_at", time.time()),
             "completed_at": time.time(),
             "status": "completed",
+            # 模型配置（用于比较）
+            "video_model": config.get("video_model", "kling-v2-5-turbo"),
+            "video_mode": config.get("video_mode", "pro"),
+            "video_duration": config.get("video_duration", 5),
         })
 
         print(f"\n{'='*70}")
