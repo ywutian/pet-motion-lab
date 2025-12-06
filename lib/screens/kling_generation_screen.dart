@@ -152,6 +152,24 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           _statusMessage = status['message'];
         });
 
+        // 如果是从数据库恢复的状态，说明任务已经不在运行了
+        if (status['from_database'] == true) {
+          if (status['status'] == 'completed') {
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => KlingResultScreen(petId: petId),
+                ),
+              );
+            }
+          } else {
+            // 任务中断了（服务器重启等原因）
+            throw Exception('任务已中断，请重新开始生成');
+          }
+          break;
+        }
+        
         if (status['status'] == 'completed') {
           if (mounted) {
             Navigator.push(
@@ -265,6 +283,23 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           _progress = status['progress'] / 100.0;
           _statusMessage = status['message'];
         });
+
+        // 如果是从数据库恢复的状态，说明任务已经不在运行了
+        if (status['from_database'] == true) {
+          if (status['status'] == 'completed') {
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => KlingResultScreen(petId: petId),
+                ),
+              );
+            }
+          } else {
+            throw Exception('任务已中断，请重新开始生成');
+          }
+          break;
+        }
 
         if (status['status'] == 'completed') {
           // 生成完成，跳转到结果页面

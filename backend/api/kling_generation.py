@@ -1213,17 +1213,32 @@ async def get_generation_status(pet_id: str):
         - current_step: 当前步骤
         - elapsed_time: 已用时间（秒）
     """
-    if pet_id not in task_status:
-        raise HTTPException(status_code=404, detail="任务不存在")
+    # 首先检查内存中的任务状态
+    if pet_id in task_status:
+        task = task_status[pet_id].copy()
 
-    task = task_status[pet_id].copy()
+        # 计算已用时间
+        if "started_at" in task:
+            task["elapsed_time"] = round(time.time() - task["started_at"], 1)
+            task["elapsed_time_formatted"] = _format_duration(task["elapsed_time"])
 
-    # 计算已用时间
-    if "started_at" in task:
-        task["elapsed_time"] = round(time.time() - task["started_at"], 1)
-        task["elapsed_time_formatted"] = _format_duration(task["elapsed_time"])
-
-    return JSONResponse(task)
+        return JSONResponse(task)
+    
+    # 如果内存中没有，尝试从数据库查询
+    db_task = db.get_task(pet_id)
+    if db_task:
+        # 从数据库记录构建状态响应
+        return JSONResponse({
+            "pet_id": pet_id,
+            "status": db_task.get("status", "completed"),
+            "progress": db_task.get("progress", 100),
+            "message": db_task.get("message", "任务已完成（从历史记录恢复）"),
+            "current_step": db_task.get("current_step", "completed"),
+            "from_database": True  # 标记这是从数据库恢复的
+        })
+    
+    # 都找不到才返回404
+    raise HTTPException(status_code=404, detail="任务不存在")
 
 
 def _format_duration(seconds: float) -> str:
