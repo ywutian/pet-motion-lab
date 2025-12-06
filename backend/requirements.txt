@@ -21,5 +21,6 @@ pydantic>=2.5.0
 python-dotenv>=1.0.0
 
 # 云数据库 (Turso - SQLite 云端版)
-libsql-experimental>=0.0.47
+# 使用 libsql-client (HTTP API) 更稳定
+libsql-client>=0.3.0
 

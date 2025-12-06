@@ -7,6 +7,7 @@
 import json
 import time
 import os
+import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
@@ -24,34 +25,90 @@ USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
 
 # 启动时打印数据库配置（调试用）
 print(f"🔧 数据库配置检查:")
-print(f"   TURSO_DATABASE_URL: {'已设置 (' + TURSO_DATABASE_URL[:40] + '...)' if TURSO_DATABASE_URL else '❌ 未设置'}")
+print(f"   TURSO_DATABASE_URL: {'已设置 (' + TURSO_DATABASE_URL[:50] + '...)' if TURSO_DATABASE_URL else '❌ 未设置'}")
 print(f"   TURSO_AUTH_TOKEN: {'已设置 (长度: ' + str(len(TURSO_AUTH_TOKEN)) + ')' if TURSO_AUTH_TOKEN else '❌ 未设置'}")
 print(f"   USE_TURSO: {USE_TURSO}")
+
+
+class TursoConnection:
+    """Turso 数据库连接包装器（使用 libsql_client HTTP API）"""
+    
+    def __init__(self, url: str, auth_token: str):
+        import libsql_client
+        
+        # 转换 URL 格式：libsql:// -> https://
+        if url.startswith("libsql://"):
+            url = url.replace("libsql://", "https://")
+        
+        self.client = libsql_client.create_client_sync(
+            url=url,
+            auth_token=auth_token
+        )
+        print(f"✅ Turso 连接已创建: {url[:50]}...")
+    
+    def cursor(self):
+        return TursoCursor(self.client)
+    
+    def commit(self):
+        # libsql_client 自动提交
+        pass
+    
+    def rollback(self):
+        # libsql_client 不支持显式回滚
+        pass
+    
+    def close(self):
+        self.client.close()
+
+
+class TursoCursor:
+    """Turso 游标包装器"""
+    
+    def __init__(self, client):
+        self.client = client
+        self._result = None
+        self._rows = []
+        self._index = 0
+    
+    def execute(self, sql: str, params: tuple = None):
+        # 将 ? 占位符转换为 libsql_client 格式
+        if params:
+            # libsql_client 使用位置参数
+            self._result = self.client.execute(sql, list(params))
+        else:
+            self._result = self.client.execute(sql)
+        
+        self._rows = self._result.rows if self._result else []
+        self._index = 0
+        return self
+    
+    def fetchone(self):
+        if self._index < len(self._rows):
+            row = self._rows[self._index]
+            self._index += 1
+            return row
+        return None
+    
+    def fetchall(self):
+        return self._rows
 
 
 def get_db_connection():
     """获取数据库连接（自动选择 Turso 或本地 SQLite）"""
     if USE_TURSO:
         try:
-            import libsql_experimental as libsql
             print(f"🔗 正在连接 Turso...")
-            print(f"   URL: {TURSO_DATABASE_URL}")
-            
-            # libsql_experimental 的连接方式
-            conn = libsql.connect(
-                database=TURSO_DATABASE_URL,
-                auth_token=TURSO_AUTH_TOKEN
-            )
+            conn = TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
             
             # 测试连接
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
-            cursor.fetchone()
+            result = cursor.fetchone()
+            print(f"✅ Turso 连接测试成功: {result}")
             
-            print(f"✅ 已连接到 Turso 云数据库")
             return conn
         except ImportError as e:
-            print(f"❌ libsql_experimental 导入失败: {e}")
+            print(f"❌ libsql_client 导入失败: {e}")
             print(f"⚠️ 回退到本地 SQLite 数据库")
         except Exception as e:
             print(f"❌ Turso 连接失败: {type(e).__name__}: {e}")
@@ -60,13 +117,11 @@ def get_db_connection():
             print(f"⚠️ 回退到本地 SQLite 数据库")
         
         # 回退到本地数据库
-        import sqlite3
         LOCAL_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(LOCAL_DB_PATH), check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
     else:
-        import sqlite3
         LOCAL_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(LOCAL_DB_PATH), check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -153,6 +208,8 @@ class Database:
             print(f"✅ 数据库初始化完成 ({db_type})")
         except Exception as e:
             print(f"⚠️ 数据库初始化警告: {e}")
+            import traceback
+            traceback.print_exc()
     
     def create_task(self, pet_id: str, breed: str = '', color: str = '', 
                     species: str = '', weight: str = '', birthday: str = '') -> bool:
@@ -252,6 +309,8 @@ class Database:
             return items, total
         except Exception as e:
             print(f"❌ 获取任务列表失败: {e}")
+            import traceback
+            traceback.print_exc()
             return [], 0
     
     def delete_task(self, pet_id: str) -> bool:
@@ -266,15 +325,16 @@ class Database:
     
     def _row_to_dict(self, row) -> Dict[str, Any]:
         """将数据库行转换为字典"""
-        # 兼容 Turso 和 SQLite 的不同返回格式
+        columns = ['id', 'pet_id', 'breed', 'color', 'species', 'weight', 'birthday',
+                  'status', 'progress', 'message', 'current_step', 'results', 
+                  'metadata', 'created_at', 'updated_at', 'started_at', 'completed_at']
+        
+        # 兼容不同返回格式
         if hasattr(row, 'keys'):
             # sqlite3.Row
             d = dict(row)
         elif isinstance(row, (list, tuple)):
-            # Turso 返回元组
-            columns = ['id', 'pet_id', 'breed', 'color', 'species', 'weight', 'birthday',
-                      'status', 'progress', 'message', 'current_step', 'results', 
-                      'metadata', 'created_at', 'updated_at', 'started_at', 'completed_at']
+            # Turso 或普通元组
             d = dict(zip(columns, row))
         else:
             d = dict(row)
