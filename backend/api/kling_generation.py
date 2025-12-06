@@ -2,7 +2,7 @@
 """
 可灵AI生成API路由
 支持后台执行、重试机制、步骤间隔
-使用 SQLite 数据库持久化历史记录，所有用户共享
+使用内存 + 文件系统存储（不依赖数据库）
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -23,7 +23,6 @@ from utils.video_utils import (
     convert_gif_to_transparent_gif, convert_mp4_to_transparent_gif
 )
 from config import KLING_ACCESS_KEY, KLING_SECRET_KEY, KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY, REMOVE_BG_API_KEY
-import database as db  # 导入数据库模块
 import json
 
 router = APIRouter(prefix="/api/kling", tags=["kling"])
@@ -60,7 +59,7 @@ OUTPUT_DIR = Path("output/kling_pipeline")
 
 
 # ============================================
-# 历史记录 API (使用数据库持久化，所有用户共享)
+# 历史记录 API (使用内存 + 文件系统，不依赖数据库)
 # ============================================
 
 @router.get("/history")
@@ -70,7 +69,7 @@ async def get_generation_history(
     status_filter: str = ""
 ):
     """
-    获取生成历史记录列表（所有用户共享）
+    获取生成历史记录列表（从内存和文件系统读取）
 
     Args:
         page: 页码（从1开始）
@@ -80,113 +79,74 @@ async def get_generation_history(
     Returns:
         历史记录列表，包含预览图和基本信息
     """
-    # 从数据库获取任务列表
-    db_tasks, total = db.get_all_tasks(status_filter, page, page_size)
-
     history_list = []
-
-    for task in db_tasks:
-        pet_id = task['pet_id']
+    
+    # 1. 从内存中的 task_status 获取任务（包括进行中的）
+    for pet_id, task in task_status.items():
+        # 应用状态过滤
+        if status_filter and task.get("status") != status_filter:
+            continue
+            
         pet_dir = OUTPUT_DIR / pet_id
-        
-        # 检查目录是否存在
         dir_exists = pet_dir.exists()
-
-        # 检查文件存在性（如果目录存在）
+        
+        # 检查文件存在性
         has_transparent = dir_exists and (pet_dir / "transparent.png").exists()
         has_sit = dir_exists and (pet_dir / "base_images" / "sit.png").exists()
         has_concat_video = dir_exists and (pet_dir / "videos" / "all_transitions_concatenated.mp4").exists()
         has_gifs = dir_exists and (pet_dir / "gifs").exists() and any((pet_dir / "gifs").rglob("*.gif"))
-
+        
         # 统计文件数量
         video_count = len(list((pet_dir / "videos").rglob("*.mp4"))) if dir_exists and (pet_dir / "videos").exists() else 0
         gif_count = len(list((pet_dir / "gifs").rglob("*.gif"))) if dir_exists and (pet_dir / "gifs").exists() else 0
-
-        # 获取创建时间（优先使用数据库中的时间）
-        created_at = task.get('created_at', time.time())
-        if dir_exists:
-            try:
-                created_at = task.get('created_at', pet_dir.stat().st_mtime)
-            except:
-                pass
-
-        # 从数据库 results 中提取统计信息（用于文件不存在的情况）
-        db_results = task.get('results', {})
-        if isinstance(db_results, str):
-            try:
-                db_results = json.loads(db_results)
-            except:
-                db_results = {}
         
-        # 如果本地没有文件，从数据库结果中统计
-        if not dir_exists and db_results:
-            steps = db_results.get('steps', {})
-            # 统计视频数量
-            if 'first_transitions' in steps:
-                video_count += len(steps.get('first_transitions', []))
-            if 'remaining_transitions' in steps:
-                video_count += len(steps.get('remaining_transitions', []))
-            if 'loop_videos' in steps:
-                video_count += len(steps.get('loop_videos', []))
-            # 统计 GIF 数量
-            if 'gifs' in steps:
-                gifs_data = steps.get('gifs', {})
-                if isinstance(gifs_data, dict):
-                    gif_count = len(gifs_data.get('transition_gifs', [])) + len(gifs_data.get('loop_gifs', []))
-
-        # 确定当前步骤（用于显示进度）
-        current_step = task.get('current_step', '')
+        created_at = task.get('started_at', time.time())
         
         history_item = {
             "pet_id": pet_id,
             "breed": task.get("breed", "未知"),
             "color": task.get("color", ""),
             "species": task.get("species", ""),
-            "status": task.get("status", "completed"),
-            "progress": task.get("progress", 100),
+            "status": task.get("status", "processing"),
+            "progress": task.get("progress", 0),
             "message": task.get("message", ""),
-            "current_step": current_step,
+            "current_step": task.get("current_step", ""),
             "created_at": created_at,
             "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
-            
-            # 文件是否存在（用于前端判断是否可以下载）
             "files_available": dir_exists,
-
-            # 预览图
             "preview": {
                 "thumbnail": f"/api/kling/download/{pet_id}/base_images/sit.png" if has_sit else None,
                 "transparent": f"/api/kling/download/{pet_id}/transparent.png" if has_transparent else None,
             },
-
-            # 文件统计
             "stats": {
                 "video_count": video_count,
                 "gif_count": gif_count,
                 "has_concatenated_video": has_concat_video,
             },
-
-            # 快捷链接
             "quick_links": {
                 "concatenated_video": f"/api/kling/download/{pet_id}/videos/all_transitions_concatenated.mp4" if has_concat_video else None,
                 "download_all": f"/api/kling/download-all/{pet_id}" if dir_exists else None,
                 "download_zip_gifs": f"/api/kling/download-zip/{pet_id}?include=gifs" if has_gifs else None,
             }
         }
-
         history_list.append(history_item)
-
-    # 同时扫描输出目录，将未在数据库中的记录添加进去（兼容旧数据）
+    
+    # 2. 扫描文件系统中的目录（补充内存中没有的已完成任务）
     if OUTPUT_DIR.exists():
         existing_pet_ids = {item['pet_id'] for item in history_list}
-
+        
         for pet_dir in OUTPUT_DIR.iterdir():
             if not pet_dir.is_dir():
                 continue
-
+            
             pet_id = pet_dir.name
             if pet_id in existing_pet_ids:
                 continue
-
+            
+            # 应用状态过滤（文件系统中的都是已完成的）
+            if status_filter and status_filter != "completed":
+                continue
+            
             # 读取元数据
             metadata_path = pet_dir / "metadata.json"
             metadata = {}
@@ -196,22 +156,67 @@ async def get_generation_history(
                         metadata = json.load(f)
                 except:
                     pass
-
-            # 将旧数据迁移到数据库
-            db.create_task(
-                pet_id=pet_id,
-                breed=metadata.get('breed', '未知'),
-                color=metadata.get('color', ''),
-                species=metadata.get('species', '')
-            )
-            db.update_task(pet_id, status='completed', progress=100)
-
+            
+            # 检查文件存在性
+            has_transparent = (pet_dir / "transparent.png").exists()
+            has_sit = (pet_dir / "base_images" / "sit.png").exists()
+            has_concat_video = (pet_dir / "videos" / "all_transitions_concatenated.mp4").exists()
+            has_gifs = (pet_dir / "gifs").exists() and any((pet_dir / "gifs").rglob("*.gif"))
+            
+            # 统计文件数量
+            video_count = len(list((pet_dir / "videos").rglob("*.mp4"))) if (pet_dir / "videos").exists() else 0
+            gif_count = len(list((pet_dir / "gifs").rglob("*.gif"))) if (pet_dir / "gifs").exists() else 0
+            
+            # 获取创建时间
+            try:
+                created_at = pet_dir.stat().st_mtime
+            except:
+                created_at = time.time()
+            
+            history_item = {
+                "pet_id": pet_id,
+                "breed": metadata.get("breed", "未知"),
+                "color": metadata.get("color", ""),
+                "species": metadata.get("species", ""),
+                "status": "completed",
+                "progress": 100,
+                "message": "已完成",
+                "current_step": "completed",
+                "created_at": created_at,
+                "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
+                "files_available": True,
+                "preview": {
+                    "thumbnail": f"/api/kling/download/{pet_id}/base_images/sit.png" if has_sit else None,
+                    "transparent": f"/api/kling/download/{pet_id}/transparent.png" if has_transparent else None,
+                },
+                "stats": {
+                    "video_count": video_count,
+                    "gif_count": gif_count,
+                    "has_concatenated_video": has_concat_video,
+                },
+                "quick_links": {
+                    "concatenated_video": f"/api/kling/download/{pet_id}/videos/all_transitions_concatenated.mp4" if has_concat_video else None,
+                    "download_all": f"/api/kling/download-all/{pet_id}",
+                    "download_zip_gifs": f"/api/kling/download-zip/{pet_id}?include=gifs" if has_gifs else None,
+                }
+            }
+            history_list.append(history_item)
+    
+    # 按创建时间倒序排序
+    history_list.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    # 分页
+    total = len(history_list)
+    start = (page - 1) * page_size
+    end = start + page_size
+    paginated_list = history_list[start:end]
+    
     return JSONResponse({
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size,
-        "items": history_list
+        "total_pages": (total + page_size - 1) // page_size if total > 0 else 1,
+        "items": paginated_list
     })
 
 
@@ -394,15 +399,12 @@ async def delete_history(pet_id: str):
     """
     pet_dir = OUTPUT_DIR / pet_id
 
-    if not pet_dir.exists() and not db.get_task(pet_id):
+    if not pet_dir.exists() and pet_id not in task_status:
         raise HTTPException(status_code=404, detail="记录不存在")
 
     # 删除目录
     if pet_dir.exists():
         shutil.rmtree(pet_dir)
-
-    # 删除数据库记录
-    db.delete_task(pet_id)
 
     # 删除内存中的任务状态
     if pet_id in task_status:
@@ -481,10 +483,6 @@ async def init_pet_task(
             "step6_gifs": []
         }
     }
-
-    # 持久化到数据库
-    db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
-                   weight=weight, birthday=birthday)
 
     return JSONResponse({
         "pet_id": pet_id,
@@ -723,19 +721,9 @@ def run_pipeline_in_background(
                 task_status[pet_id]["results"] = results
                 task_status[pet_id]["progress"] = progress
                 task_status[pet_id]["current_step"] = step_name
-                
-                # 同步到数据库
-                db.update_task(
-                    pet_id, 
-                    status='processing',
-                    progress=progress,
-                    message=f'步骤 {step_name} 已完成',
-                    results=results,
-                    current_step=step_name
-                )
-                print(f"✅ 步骤 {step_name} 已保存到数据库")
+                print(f"✅ 步骤 {step_name} 已完成 (进度: {progress}%)")
             except Exception as e:
-                print(f"⚠️ 保存步骤 {step_name} 到数据库失败: {e}")
+                print(f"⚠️ 保存步骤 {step_name} 失败: {e}")
 
         # 创建Pipeline实例（带重试和间隔配置）
         pipeline = KlingPipeline(
@@ -801,11 +789,6 @@ def run_pipeline_in_background(
             "status": "completed",
         })
 
-        # 同步到数据库（持久化，所有用户可见）
-        db.update_task(pet_id, status='completed', progress=100,
-                       message='✅ 生成完成！', results=results,
-                       completed_at=time.time())
-
         print(f"\n{'='*70}")
         print(f"✅ 后台任务完成: {pet_id}")
         print(f"{'='*70}\n")
@@ -823,10 +806,6 @@ def run_pipeline_in_background(
         task_status[pet_id]["status"] = "failed"
         task_status[pet_id]["message"] = f"❌ 生成失败: {error_msg}"
         task_status[pet_id]["error"] = error_trace
-
-        # 同步到数据库
-        db.update_task(pet_id, status='failed',
-                       message=f'❌ 生成失败: {error_msg}')
 
 
 @router.post("/generate")
@@ -906,12 +885,6 @@ async def generate_pet_animations(
         "error": None,
         "started_at": time.time()
     }
-
-    # 持久化到数据库
-    db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
-                   weight=weight, birthday=birthday)
-    db.update_task(pet_id, status='processing', started_at=time.time(),
-                   metadata=generation_config)  # 保存配置到数据库
 
     # 启动后台线程执行生成流程
     thread = threading.Thread(
@@ -1224,17 +1197,17 @@ async def get_generation_status(pet_id: str):
 
         return JSONResponse(task)
     
-    # 如果内存中没有，尝试从数据库查询
-    db_task = db.get_task(pet_id)
-    if db_task:
-        # 从数据库记录构建状态响应
+    # 如果内存中没有，检查文件系统中是否有已完成的任务
+    pet_dir = OUTPUT_DIR / pet_id
+    if pet_dir.exists():
+        # 从文件系统恢复的已完成任务
         return JSONResponse({
             "pet_id": pet_id,
-            "status": db_task.get("status", "completed"),
-            "progress": db_task.get("progress", 100),
-            "message": db_task.get("message", "任务已完成（从历史记录恢复）"),
-            "current_step": db_task.get("current_step", "completed"),
-            "from_database": True  # 标记这是从数据库恢复的
+            "status": "completed",
+            "progress": 100,
+            "message": "任务已完成（从文件系统恢复）",
+            "current_step": "completed",
+            "from_filesystem": True  # 标记这是从文件系统恢复的
         })
     
     # 都找不到才返回404

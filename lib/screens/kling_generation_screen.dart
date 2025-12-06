@@ -152,20 +152,15 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           _statusMessage = status['message'];
         });
 
-        // 如果是从数据库恢复的状态，说明任务已经不在运行了
-        if (status['from_database'] == true) {
-          if (status['status'] == 'completed') {
-            if (mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => KlingResultScreen(petId: petId),
-                ),
-              );
-            }
-          } else {
-            // 任务中断了（服务器重启等原因）
-            throw Exception('任务已中断，请重新开始生成');
+        // 如果是从文件系统恢复的状态，说明任务已经完成
+        if (status['from_filesystem'] == true) {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => KlingResultScreen(petId: petId),
+              ),
+            );
           }
           break;
         }
@@ -284,19 +279,15 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           _statusMessage = status['message'];
         });
 
-        // 如果是从数据库恢复的状态，说明任务已经不在运行了
-        if (status['from_database'] == true) {
-          if (status['status'] == 'completed') {
-            if (mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => KlingResultScreen(petId: petId),
-                ),
-              );
-            }
-          } else {
-            throw Exception('任务已中断，请重新开始生成');
+        // 如果是从文件系统恢复的状态，说明任务已经完成
+        if (status['from_filesystem'] == true) {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => KlingResultScreen(petId: petId),
+              ),
+            );
           }
           break;
         }

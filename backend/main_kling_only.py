@@ -72,50 +72,23 @@ async def root():
 async def health_check():
     """健康检查"""
     import sys
-    import os
-    import database as db
+    from pathlib import Path
     
-    # 直接从环境变量读取（不使用缓存的模块变量）
-    env_turso_url = os.environ.get("TURSO_DATABASE_URL", "")
-    env_turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
-    
-    # 检查数据库状态
-    db_status = "unknown"
-    db_type = "unknown"
-    db_error = None
-    record_count = 0
-    
-    try:
-        # 尝试查询数据库
-        tasks, total = db.get_all_tasks(page=1, page_size=1)
-        db_status = "connected"
-        db_type = "turso" if db.USE_TURSO else "local_sqlite"
-        record_count = total
-    except Exception as e:
-        db_status = "error"
-        db_error = str(e)
-    
-    # 列出所有环境变量名（用于调试）
-    env_keys = [k for k in os.environ.keys() if 'TURSO' in k.upper()]
+    # 检查输出目录状态
+    output_dir = Path("output/kling_pipeline")
+    task_count = 0
+    if output_dir.exists():
+        task_count = len([d for d in output_dir.iterdir() if d.is_dir()])
     
     return {
         "status": "healthy",
         "python_version": sys.version,
         "api_version": "2.0.0",
         "mode": "kling_only",
-        "database": {
-            "status": db_status,
-            "type": db_type,
-            "use_turso": db.USE_TURSO,
-            "module_turso_url": db.TURSO_DATABASE_URL[:30] + "..." if db.TURSO_DATABASE_URL else None,
-            "module_turso_token_len": len(db.TURSO_AUTH_TOKEN) if db.TURSO_AUTH_TOKEN else 0,
-            "env_turso_url_set": bool(env_turso_url),
-            "env_turso_url_preview": env_turso_url[:50] + "..." if env_turso_url else None,
-            "env_turso_token_set": bool(env_turso_token),
-            "env_turso_token_len": len(env_turso_token),
-            "turso_env_keys_found": env_keys,
-            "record_count": record_count,
-            "error": db_error
+        "storage": {
+            "type": "memory + filesystem",
+            "output_dir": str(output_dir),
+            "task_count": task_count,
         },
         "services": {
             "kling_ai": "available",
