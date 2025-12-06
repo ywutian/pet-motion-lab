@@ -631,7 +631,7 @@ async def step2_generate_base_image(
         task["results"]["step2_base_image"] = result
         task["current_step"] = 2
         task["progress"] = 30
-        task["message"] = "步骤2完成: 基础坐姿图片已生成（含背景去除）"
+        task["message"] = "步骤2完成: 基础坐姿图片已生成"
         task["status"] = "step2_completed"
 
         return JSONResponse({

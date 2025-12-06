@@ -257,8 +257,7 @@ class KlingPipeline:
         breed: str,
         color: str,
         species: str,
-        pet_id: str,
-        remove_bg_after: bool = True
+        pet_id: str
     ) -> str:
         """
         步骤2: 生成基础坐姿图片
@@ -269,7 +268,6 @@ class KlingPipeline:
             color: 颜色
             species: 物种
             pet_id: 宠物ID
-            remove_bg_after: 生成后是否去除背景（默认True）
 
         Returns:
             坐姿图片路径
@@ -282,17 +280,6 @@ class KlingPipeline:
         print(f"🖼️  步骤2: 生成基础坐姿图片")
         sit_image_raw = self._generate_base_image("sit", transparent_image)
         print(f"✅ 坐姿图片已生成: {sit_image_raw}")
-
-        # 生成后去除背景
-        if remove_bg_after:
-            print(f"🎨 步骤2.5: 去除生成图片的背景")
-            sit_image_clean = str(self.images_dir / "sit_clean.png")
-            remove_background(sit_image_raw, sit_image_clean)
-            print(f"✅ sit图片背景已去除: {sit_image_clean}")
-            # 覆盖原sit.png
-            import shutil
-            shutil.copy(sit_image_clean, sit_image_raw)
-            print(f"✅ 已更新sit.png为去背景版本")
 
         return sit_image_raw
 
@@ -442,29 +429,14 @@ class KlingPipeline:
 
         self._wait_interval(self.step_interval, "步骤3完成")
 
-        # ==================== 步骤3.5: 保存透明背景版本（可选）====================
-        self._update_status(25, "步骤3.5: 处理图片背景...", "step3.5")
-        print("\n🎨 步骤3.5: 处理sit图片背景")
+        # ==================== 步骤3.5: 直接使用生成的sit图片 ====================
+        self._update_status(25, "步骤3.5: 保存sit图片...", "step3.5")
+        print("\n📌 步骤3.5: 直接使用sit图片（不再去背景）")
         
-        # 保留原始白底版本用于视频生成（避免可灵自动加背景导致不一致）
-        sit_image_with_bg = sit_image_raw  # 白底版本，用于生成视频
-        sit_image_transparent = str(self.images_dir / "sit_transparent.png")
-
-        if remove_background_flag:
-            # 生成透明背景版本（保存为单独文件，不覆盖原图）
-            remove_background(sit_image_raw, sit_image_transparent)
-            print(f"✅ 透明背景版本已保存: {sit_image_transparent}")
-            print(f"📌 视频生成将使用白底版本: {sit_image_with_bg}")
-            print(f"   （避免可灵自动加背景导致颜色不一致）")
-        else:
-            print(f"⚠️  跳过背景去除")
-            # 复制一份作为透明版本（实际上还是有背景）
-            shutil.copy(sit_image_raw, sit_image_transparent)
-
-        # 用于视频生成的是白底版本
-        sit_image = sit_image_with_bg
+        # 直接使用生成的sit图片用于视频生成
+        sit_image = sit_image_raw
         results["steps"]["base_sit"] = sit_image
-        results["steps"]["base_sit_transparent"] = sit_image_transparent
+        print(f"✅ sit图片已保存: {sit_image}")
         save_step_result("step3.5", 25)
 
         self._wait_interval(self.step_interval, "步骤3.5完成")
