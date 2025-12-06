@@ -84,24 +84,55 @@ async def get_generation_history(
     for task in db_tasks:
         pet_id = task['pet_id']
         pet_dir = OUTPUT_DIR / pet_id
+        
+        # 检查目录是否存在
+        dir_exists = pet_dir.exists()
 
-        # 如果目录不存在，跳过（可能已被删除）
-        if not pet_dir.exists():
-            continue
-
-        # 检查文件存在性
-        has_transparent = (pet_dir / "transparent.png").exists()
-        has_sit = (pet_dir / "base_images" / "sit.png").exists()
-        has_concat_video = (pet_dir / "videos" / "all_transitions_concatenated.mp4").exists()
-        has_gifs = (pet_dir / "gifs").exists() and any((pet_dir / "gifs").rglob("*.gif"))
+        # 检查文件存在性（如果目录存在）
+        has_transparent = dir_exists and (pet_dir / "transparent.png").exists()
+        has_sit = dir_exists and (pet_dir / "base_images" / "sit.png").exists()
+        has_concat_video = dir_exists and (pet_dir / "videos" / "all_transitions_concatenated.mp4").exists()
+        has_gifs = dir_exists and (pet_dir / "gifs").exists() and any((pet_dir / "gifs").rglob("*.gif"))
 
         # 统计文件数量
-        video_count = len(list((pet_dir / "videos").rglob("*.mp4"))) if (pet_dir / "videos").exists() else 0
-        gif_count = len(list((pet_dir / "gifs").rglob("*.gif"))) if (pet_dir / "gifs").exists() else 0
+        video_count = len(list((pet_dir / "videos").rglob("*.mp4"))) if dir_exists and (pet_dir / "videos").exists() else 0
+        gif_count = len(list((pet_dir / "gifs").rglob("*.gif"))) if dir_exists and (pet_dir / "gifs").exists() else 0
 
         # 获取创建时间（优先使用数据库中的时间）
-        created_at = task.get('created_at', pet_dir.stat().st_mtime)
+        created_at = task.get('created_at', time.time())
+        if dir_exists:
+            try:
+                created_at = task.get('created_at', pet_dir.stat().st_mtime)
+            except:
+                pass
 
+        # 从数据库 results 中提取统计信息（用于文件不存在的情况）
+        db_results = task.get('results', {})
+        if isinstance(db_results, str):
+            try:
+                db_results = json.loads(db_results)
+            except:
+                db_results = {}
+        
+        # 如果本地没有文件，从数据库结果中统计
+        if not dir_exists and db_results:
+            steps = db_results.get('steps', {})
+            # 统计视频数量
+            if 'first_transitions' in steps:
+                video_count += len(steps.get('first_transitions', []))
+            if 'remaining_transitions' in steps:
+                video_count += len(steps.get('remaining_transitions', []))
+            if 'loop_videos' in steps:
+                video_count += len(steps.get('loop_videos', []))
+            # 统计 GIF 数量
+            if 'gifs' in steps:
+                gifs_data = steps.get('gifs', {})
+                if isinstance(gifs_data, dict):
+                    gif_count = len(gifs_data.get('transition_gifs', [])) + len(gifs_data.get('loop_gifs', []))
+
+        # 确定当前步骤（用于显示进度）
+        current_step = task.get('current_step', '')
+        
         history_item = {
             "pet_id": pet_id,
             "breed": task.get("breed", "未知"),
@@ -110,8 +141,12 @@ async def get_generation_history(
             "status": task.get("status", "completed"),
             "progress": task.get("progress", 100),
             "message": task.get("message", ""),
+            "current_step": current_step,
             "created_at": created_at,
             "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
+            
+            # 文件是否存在（用于前端判断是否可以下载）
+            "files_available": dir_exists,
 
             # 预览图
             "preview": {
@@ -129,7 +164,7 @@ async def get_generation_history(
             # 快捷链接
             "quick_links": {
                 "concatenated_video": f"/api/kling/download/{pet_id}/videos/all_transitions_concatenated.mp4" if has_concat_video else None,
-                "download_all": f"/api/kling/download-all/{pet_id}",
+                "download_all": f"/api/kling/download-all/{pet_id}" if dir_exists else None,
                 "download_zip_gifs": f"/api/kling/download-zip/{pet_id}?include=gifs" if has_gifs else None,
             }
         }

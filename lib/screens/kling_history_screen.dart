@@ -209,6 +209,9 @@ class _HistoryCard extends StatelessWidget {
     final stats = item['stats'] ?? {};
     final preview = item['preview'] ?? {};
     final thumbnailUrl = preview['thumbnail'];
+    final progress = item['progress'] ?? 0;
+    final currentStep = item['current_step'] ?? '';
+    final filesAvailable = item['files_available'] ?? false;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -219,22 +222,51 @@ class _HistoryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 预览图
-            if (thumbnailUrl != null)
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: _buildNetworkImage('${ApiConfig.baseUrl}$thumbnailUrl'),
-                ),
-              )
-            else
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Icon(Icons.pets, size: 48),
-                ),
-              ),
+            Stack(
+              children: [
+                if (thumbnailUrl != null)
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: _buildNetworkImage('${ApiConfig.baseUrl}$thumbnailUrl'),
+                    ),
+                  )
+                else
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.pets, size: 48),
+                          if (!filesAvailable && status == 'completed')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '文件已清理',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // 进度条（处理中时显示）
+                if (status == 'processing')
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: LinearProgressIndicator(
+                      value: progress / 100,
+                      backgroundColor: Colors.black26,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                    ),
+                  ),
+              ],
+            ),
 
             Padding(
               padding: const EdgeInsets.all(16),
@@ -252,17 +284,35 @@ class _HistoryCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _buildStatusBadge(context, status),
+                      _buildStatusBadge(context, status, progress),
                     ],
                   ),
                   const SizedBox(height: 8),
 
-                  // 时间
-                  Text(
-                    createdAt,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                  // 时间和当前步骤
+                  Row(
+                    children: [
+                      Text(
+                        createdAt,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      if (status == 'processing' && currentStep.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            currentStep,
+                            style: const TextStyle(fontSize: 10, color: Colors.blue),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 12),
 
@@ -275,6 +325,8 @@ class _HistoryCard extends StatelessWidget {
                       _buildChip(context, Icons.gif, '${stats['gif_count'] ?? 0}个GIF'),
                       if (stats['has_concatenated_video'] == true)
                         _buildChip(context, Icons.movie, '拼接视频', color: Colors.green),
+                      if (!filesAvailable && status == 'completed')
+                        _buildChip(context, Icons.cloud_off, '文件已清理', color: Colors.orange),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -306,7 +358,7 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context, String status) {
+  Widget _buildStatusBadge(BuildContext context, String status, [int progress = 0]) {
     Color color;
     String text;
     IconData icon;
@@ -319,13 +371,18 @@ class _HistoryCard extends StatelessWidget {
         break;
       case 'processing':
         color = Colors.orange;
-        text = '处理中';
+        text = '处理中 $progress%';
         icon = Icons.hourglass_top;
         break;
       case 'failed':
         color = Colors.red;
         text = '失败';
         icon = Icons.error;
+        break;
+      case 'initialized':
+        color = Colors.blue;
+        text = '已创建';
+        icon = Icons.schedule;
         break;
       default:
         color = Colors.grey;
