@@ -784,13 +784,4 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    _breedController.dispose();
-    _colorController.dispose();
-    _weightController.dispose();
-    _birthdayController.dispose();
-    super.dispose();
-  }
 }
