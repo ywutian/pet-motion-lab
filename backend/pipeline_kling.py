@@ -439,13 +439,35 @@ class KlingPipeline:
 
         self._wait_interval(self.step_interval, "步骤3完成")
 
-        # ==================== 步骤3.5: 直接使用生成的sit图片 ====================
-        self._update_status(25, "步骤3.5: 保存sit图片...", "step3.5")
-        print("\n📌 步骤3.5: 直接使用sit图片（不再去背景）")
+        # ==================== 步骤3.5: 对sit图片进行抠图+白底处理，确保100%白色背景 ====================
+        self._update_status(25, "步骤3.5: 对sit图片进行抠图+白底处理...", "step3.5")
+        print("\n📌 步骤3.5: 对sit图片进行抠图+白底处理（确保100%白色背景）")
         
-        # 直接使用生成的sit图片用于视频生成
-        sit_image = sit_image_raw
+        # 问题：Kling AI 图生图可能生成黑色/灰色背景
+        # 解决：再做一次 Remove.bg 抠图 + 添加白色背景
+        sit_transparent_path = str(self.images_dir / "sit_transparent.png")
+        sit_white_bg_path = str(self.images_dir / "sit.png")  # 最终的sit图片
+        
+        try:
+            # 1. 对生成的sit图片进行抠图
+            print(f"  🎨 对 sit 图片进行抠图...")
+            remove_background(sit_image_raw, sit_transparent_path)
+            print(f"  ✅ sit 抠图完成: {sit_transparent_path}")
+            
+            # 2. 添加纯白色背景
+            print(f"  ⬜ 添加纯白色背景...")
+            add_white_background(sit_transparent_path, sit_white_bg_path)
+            print(f"  ✅ sit 白底图片: {sit_white_bg_path}")
+            
+            sit_image = sit_white_bg_path
+        except Exception as e:
+            # 如果抠图失败，回退到原始图片
+            print(f"  ⚠️ 抠图失败: {e}")
+            print(f"  ⚠️ 回退使用原始生成的sit图片")
+            sit_image = sit_image_raw
+        
         results["steps"]["base_sit"] = sit_image
+        results["steps"]["sit_transparent"] = sit_transparent_path
         print(f"✅ sit图片已保存: {sit_image}")
         save_step_result("step3.5", 25)
 
