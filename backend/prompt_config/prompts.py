@@ -31,7 +31,13 @@ CAMERA = "正面视角，{species}位于画面中央，全身可见，四周留�
 LIGHTING = "柔和均匀的灯光，没有阴影"
 
 # 视频专用约束
-VIDEO_CONSTRAINT = "背景从头到尾保持纯白不变，镜头固定不动"
+VIDEO_CONSTRAINT = "背景从头到尾保持纯白不变"
+
+# 镜头跟随约束（用于walk相关视频）
+CAMERA_FOLLOW = "镜头跟随{species}移动，保持{species}始终在画面中央，大小不变"
+
+# 镜头固定约束（用于非移动视频）
+CAMERA_STATIC = "镜头固定不动"
 
 # ============================================
 # 负向提示词（排除不想要的元素）
@@ -56,7 +62,7 @@ NEGATIVE_PROMPT = ",".join([
 # ============================================
 # 辅助函数：构建提示词
 # ============================================
-def _build_prompt(action_desc: str, is_video: bool = False) -> str:
+def _build_prompt(action_desc: str, is_video: bool = False, camera_follow: bool = False) -> str:
     """
     构建完整提示词
     
@@ -68,6 +74,12 @@ def _build_prompt(action_desc: str, is_video: bool = False) -> str:
     5. 镜头约束
     6. 光照约束
     7. 视频约束（如果是视频）
+    8. 镜头移动约束（跟随或固定）
+    
+    Args:
+        action_desc: 动作描述
+        is_video: 是否为视频
+        camera_follow: 是否需要镜头跟随（用于walk等移动场景）
     """
     parts = [
         BACKGROUND,
@@ -79,6 +91,10 @@ def _build_prompt(action_desc: str, is_video: bool = False) -> str:
     ]
     if is_video:
         parts.append(VIDEO_CONSTRAINT)
+        if camera_follow:
+            parts.append(CAMERA_FOLLOW)
+        else:
+            parts.append(CAMERA_STATIC)
     
     return "，".join(parts) + "。"
 
@@ -113,8 +129,9 @@ TRANSITION_PROMPTS = {
     # === 从坐姿开始 ===
     "sit2walk": _build_prompt(
         "从坐姿站起并开始行走，前腿先伸直，后腿发力撑起身体，"
-        "然后四肢着地迈步，动作流畅自然",
-        is_video=True
+        "然后四肢着地迈步向前走，动作流畅自然",
+        is_video=True,
+        camera_follow=True  # 镜头跟随移动
     ),
     "sit2rest": _build_prompt(
         "从坐姿缓慢趴下，前腿向前滑动，身体重心下移，"
@@ -129,19 +146,22 @@ TRANSITION_PROMPTS = {
     
     # === 从行走开始 ===
     "walk2sit": _build_prompt(
-        "从行走停下并坐下，步伐减慢，后腿收拢，臀部着地，"
+        "从行走停下并坐下，步伐逐渐减慢直到停止，后腿收拢，臀部着地，"
         "最终呈标准坐姿，前腿伸直，眼睛看向镜头",
-        is_video=True
+        is_video=True,
+        camera_follow=True  # 镜头跟随到停止
     ),
     "walk2rest": _build_prompt(
-        "从行走趴下休息，步伐减慢停止，前腿滑动，身体下沉，"
+        "从行走趴下休息，步伐逐渐减慢直到停止，前腿滑动，身体下沉，"
         "最终趴卧，眼睛保持睁开",
-        is_video=True
+        is_video=True,
+        camera_follow=True  # 镜头跟随到停止
     ),
     "walk2sleep": _build_prompt(
-        "从行走趴下并入睡，步伐减慢停止，身体趴下，"
+        "从行走趴下并入睡，步伐逐渐减慢直到停止，身体趴下，"
         "眼睛闭合，呼吸平稳，进入睡眠",
-        is_video=True
+        is_video=True,
+        camera_follow=True  # 镜头跟随到停止
     ),
     
     # === 从趴卧开始 ===
@@ -152,8 +172,9 @@ TRANSITION_PROMPTS = {
     ),
     "rest2walk": _build_prompt(
         "从趴卧站起并行走，四肢撑地站起，身体抬高，"
-        "开始迈步行走，精神饱满",
-        is_video=True
+        "开始迈步向前走，精神饱满",
+        is_video=True,
+        camera_follow=True  # 镜头跟随移动
     ),
     "rest2sleep": _build_prompt(
         "从趴卧进入睡眠，头部缓慢低下，眼睛逐渐闭合，"
@@ -169,8 +190,9 @@ TRANSITION_PROMPTS = {
     ),
     "sleep2walk": _build_prompt(
         "从睡眠醒来并站起行走，眼睛睁开，伸懒腰，"
-        "四肢撑地站起，开始迈步，逐渐恢复精神",
-        is_video=True
+        "四肢撑地站起，开始迈步向前走，逐渐恢复精神",
+        is_video=True,
+        camera_follow=True  # 镜头跟随移动
     ),
     "sleep2rest": _build_prompt(
         "从睡眠醒来但保持趴卧，眼睛缓慢睁开，头部微抬，"
@@ -190,9 +212,10 @@ LOOP_PROMPTS = {
         is_video=True
     ),
     "walk": _build_prompt(
-        "原地踏步，四肢交替抬落模拟行走，身体略有起伏，"
-        "尾巴摆动，但整体位置不移动，首尾帧一致可循环",
-        is_video=True
+        "持续向前行走，四肢交替迈步，身体略有起伏，"
+        "尾巴自然摆动，步伐稳定均匀，首尾帧动作姿势一致可循环",
+        is_video=True,
+        camera_follow=True  # 镜头跟随移动
     ),
     "rest": _build_prompt(
         "保持趴卧不动，只有呼吸起伏，耳朵偶尔转动，眨眼，"
