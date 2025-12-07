@@ -44,6 +44,9 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   // 阶段控制：等待确认坐姿图
   bool _waitingForSitConfirmation = false;
   String? _sitImageUrl;  // 坐姿图 URL
+  
+  // 生成模式：true = 分阶段（先确认坐姿图），false = 一次性生成
+  bool _useStepByStepMode = true;
 
   @override
   void initState() {
@@ -253,11 +256,19 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       _sitImageUrl = null;
     });
 
+    // 根据模式选择不同的生成流程
+    if (_useStepByStepMode) {
+      await _startStepByStepGeneration();
+    } else {
+      await _startFullGeneration();
+    }
+  }
+
+  /// 分阶段生成：先生成坐姿图，确认后再继续
+  Future<void> _startStepByStepGeneration() async {
     try {
       final service = KlingGenerationService();
       final settings = Provider.of<SettingsProvider>(context, listen: false);
-
-      // 从设置中获取生成配置
       final config = GenerationConfig.fromSettings(settings);
 
       // 阶段1：只生成坐姿图片
@@ -291,7 +302,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           if (mounted) {
             setState(() {
               _waitingForSitConfirmation = true;
-              // 构建坐姿图 URL
               _sitImageUrl = '${KlingGenerationService.baseUrl}/api/kling/download/$petId/base_images/sit.png';
             });
           }
@@ -308,6 +318,68 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         setState(() {
           _isGenerating = false;
           _waitingForSitConfirmation = false;
+        });
+      }
+    }
+  }
+
+  /// 一次性生成：直接生成全部内容
+  Future<void> _startFullGeneration() async {
+    try {
+      final service = KlingGenerationService();
+      final settings = Provider.of<SettingsProvider>(context, listen: false);
+      final config = GenerationConfig.fromSettings(settings);
+
+      // 直接开始完整生成
+      final petId = await service.startGeneration(
+        imageFile: _selectedImage!,
+        breed: _breedController.text,
+        color: _colorController.text,
+        species: _species,
+        weight: _weightController.text,
+        birthday: _birthdayController.text,
+        config: config,
+      );
+
+      _processingPetId = petId;
+
+      // 轮询状态直到完成
+      _shouldStopPolling = false;
+      await for (final status in service.pollStatus(petId)) {
+        if (_shouldStopPolling || !mounted) {
+          break;
+        }
+        
+        setState(() {
+          _progress = status['progress'] / 100.0;
+          _statusMessage = status['message'];
+        });
+
+        if (status['from_filesystem'] == true || status['status'] == 'completed') {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => KlingResultScreen(petId: petId),
+              ),
+            );
+          }
+          break;
+        } else if (status['status'] == 'failed') {
+          throw Exception(status['message']);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('生成失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+          _processingPetId = null;
         });
       }
     }
@@ -823,20 +895,81 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
 
   Widget _buildGenerateButton() {
     final isDesktop = Responsive.isDesktop(context);
+    final theme = Theme.of(context);
 
     return FadeInUp(
       delay: const Duration(milliseconds: 400),
-      child: FilledButton.icon(
-        onPressed: _isGenerating ? null : _startGeneration,
-        icon: const Icon(Icons.auto_awesome),
-        label: const Text('开始生成'),
-        style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: isDesktop ? 24 : 18),
-          textStyle: TextStyle(
-            fontSize: isDesktop ? 20 : 18,
-            fontWeight: FontWeight.bold,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 生成模式选择
+          Card(
+            elevation: 1,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 20 : 16,
+                vertical: isDesktop ? 12 : 8,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _useStepByStepMode ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                    color: theme.colorScheme.primary,
+                    size: isDesktop ? 24 : 20,
+                  ),
+                  SizedBox(width: isDesktop ? 12 : 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _useStepByStepMode ? '分阶段生成' : '一次性生成',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: isDesktop ? 16 : 14,
+                          ),
+                        ),
+                        Text(
+                          _useStepByStepMode 
+                              ? '先生成坐姿图确认后再继续' 
+                              : '直接生成全部内容',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: isDesktop ? 13 : 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: _useStepByStepMode,
+                    onChanged: _isGenerating ? null : (value) {
+                      setState(() {
+                        _useStepByStepMode = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          
+          SizedBox(height: isDesktop ? 16 : 12),
+          
+          // 生成按钮
+          FilledButton.icon(
+            onPressed: _isGenerating ? null : _startGeneration,
+            icon: const Icon(Icons.auto_awesome),
+            label: Text(_useStepByStepMode ? '开始生成（分阶段）' : '开始生成'),
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.symmetric(vertical: isDesktop ? 24 : 18),
+              textStyle: TextStyle(
+                fontSize: isDesktop ? 20 : 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
