@@ -230,17 +230,17 @@ class _HistoryCard extends StatelessWidget {
               children: [
                 // 只有在文件可用且不是处理中时才加载图片
                 if (thumbnailUrl != null && filesAvailable && status != 'processing')
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
+              AspectRatio(
+                aspectRatio: 16 / 9,
                     child: Container(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: _buildNetworkImage('${ApiConfig.baseUrl}$thumbnailUrl'),
-                    ),
-                  )
-                else
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Container(
+                ),
+              )
+            else
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -264,7 +264,7 @@ class _HistoryCard extends StatelessWidget {
                               child: Text(
                                 '文件已清理',
                                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                              ),
+                ),
                             ),
                         ],
                       ),
@@ -283,7 +283,7 @@ class _HistoryCard extends StatelessWidget {
                     ),
                   ),
               ],
-            ),
+              ),
 
             Padding(
               padding: const EdgeInsets.all(16),
@@ -309,11 +309,11 @@ class _HistoryCard extends StatelessWidget {
                   // 时间和当前步骤
                   Row(
                     children: [
-                      Text(
-                        createdAt,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                  Text(
+                    createdAt,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
                       ),
                       if (status == 'processing' && currentStep.isNotEmpty) ...[
                         const SizedBox(width: 8),

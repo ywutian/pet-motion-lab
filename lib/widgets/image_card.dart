@@ -177,8 +177,8 @@ class _ImageCardState extends State<ImageCard> {
                 aspectRatio: 16 / 9,
                 child: Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Image.file(
-                    displayFile,
+                child: Image.file(
+                  displayFile,
                     fit: BoxFit.contain, // 完整显示图片
                   ),
                 ),

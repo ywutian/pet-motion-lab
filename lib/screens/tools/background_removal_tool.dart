@@ -131,20 +131,20 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
     return ResponsiveCard(
       color: theme.colorScheme.primaryContainer.withOpacity(0.3),
       child: Row(
-        children: [
+          children: [
           Icon(
             Icons.info_outline,
             color: theme.colorScheme.primary,
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
+                child: Text(
               '上传图片，AI自动去除背景，保存透明背景的PNG图片',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.8),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -166,8 +166,8 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
         _buildUploadButton(theme),
         SizedBox(height: spacing),
 
-        // 原图预览
-        if (_originalImage != null) ...[
+            // 原图预览
+            if (_originalImage != null) ...[
           _buildImageCard(
             theme: theme,
             title: '原图',
@@ -176,7 +176,7 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
           ),
           SizedBox(height: spacing),
 
-          // 去除背景按钮
+              // 去除背景按钮
           _buildRemoveBackgroundButton(theme),
           SizedBox(height: spacing),
         ],
@@ -284,24 +284,24 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
     final isDesktop = Responsive.isDesktop(context);
     
     return FilledButton.icon(
-      onPressed: _isProcessing ? null : _removeBackground,
-      icon: _isProcessing
-          ? const SizedBox(
-              width: 20,
-              height: 20,
+                onPressed: _isProcessing ? null : _removeBackground,
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            )
-          : const Icon(Icons.content_cut),
-      label: Text(_isProcessing ? '处理中...' : '去除背景'),
+                      )
+                    : const Icon(Icons.content_cut),
+                label: Text(_isProcessing ? '处理中...' : '去除背景'),
       style: FilledButton.styleFrom(
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: isDesktop ? 20 : 16),
         textStyle: TextStyle(
           fontSize: isDesktop ? 16 : 14,
           fontWeight: FontWeight.w600,
-        ),
-      ),
+                ),
+              ),
     );
   }
 
@@ -348,10 +348,10 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
           padding: EdgeInsets.zero,
           child: Container(
             height: effectiveHeight,
-            decoration: BoxDecoration(
+                decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               color: showCheckerboard ? null : theme.colorScheme.surfaceContainerHighest,
-              // 棋盘格背景，显示透明效果
+                  // 棋盘格背景，显示透明效果
               image: showCheckerboard
                   ? const DecorationImage(
                       image: AssetImage('assets/images/checkerboard.png'),
@@ -371,9 +371,9 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
                 ),
               ),
             ),
-          ),
-        ),
-      ],
+                ),
+              ),
+            ],
     );
   }
 }

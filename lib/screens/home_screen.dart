@@ -23,25 +23,25 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   final List<NavigationDestination> _destinations = const [
-    NavigationDestination(
-      icon: Icon(Icons.auto_awesome_outlined),
-      selectedIcon: Icon(Icons.auto_awesome),
-      label: '可灵AI',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.build_outlined),
-      selectedIcon: Icon(Icons.build),
-      label: '工具',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.history_outlined),
-      selectedIcon: Icon(Icons.history),
-      label: '历史',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
-      label: '设置',
+              NavigationDestination(
+                icon: Icon(Icons.auto_awesome_outlined),
+                selectedIcon: Icon(Icons.auto_awesome),
+                label: '可灵AI',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.build_outlined),
+                selectedIcon: Icon(Icons.build),
+                label: '工具',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history),
+                label: '历史',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: '设置',
     ),
   ];
 
@@ -69,9 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: _screens[_currentIndex],
                 ),
               ),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
       ),
       // 移动端显示底部导航栏
       bottomNavigationBar: isDesktop ? null : _buildBottomNavigationBar(),

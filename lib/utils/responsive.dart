@@ -14,7 +14,7 @@ class Responsive {
 
   /// 获取屏幕宽度
   static double width(BuildContext context) => MediaQuery.of(context).size.width;
-  
+
   /// 获取屏幕高度
   static double height(BuildContext context) => MediaQuery.of(context).size.height;
 

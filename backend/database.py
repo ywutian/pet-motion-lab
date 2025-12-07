@@ -172,37 +172,37 @@ class Database:
     def _init_database(self):
         """初始化数据库表"""
         try:
-            with self.get_cursor() as cursor:
-                # 创建历史记录表
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS generation_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        pet_id TEXT UNIQUE NOT NULL,
-                        breed TEXT DEFAULT '',
-                        color TEXT DEFAULT '',
-                        species TEXT DEFAULT '',
-                        weight TEXT DEFAULT '',
-                        birthday TEXT DEFAULT '',
-                        status TEXT DEFAULT 'initialized',
-                        progress INTEGER DEFAULT 0,
-                        message TEXT DEFAULT '',
-                        current_step TEXT DEFAULT '',
-                        results TEXT DEFAULT '{}',
-                        metadata TEXT DEFAULT '{}',
-                        created_at REAL NOT NULL,
-                        updated_at REAL NOT NULL,
-                        started_at REAL,
-                        completed_at REAL
-                    )
-                ''')
-                
+        with self.get_cursor() as cursor:
+            # 创建历史记录表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS generation_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pet_id TEXT UNIQUE NOT NULL,
+                    breed TEXT DEFAULT '',
+                    color TEXT DEFAULT '',
+                    species TEXT DEFAULT '',
+                    weight TEXT DEFAULT '',
+                    birthday TEXT DEFAULT '',
+                    status TEXT DEFAULT 'initialized',
+                    progress INTEGER DEFAULT 0,
+                    message TEXT DEFAULT '',
+                    current_step TEXT DEFAULT '',
+                    results TEXT DEFAULT '{}',
+                    metadata TEXT DEFAULT '{}',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    started_at REAL,
+                    completed_at REAL
+                )
+            ''')
+            
                 # 创建索引（Turso 兼容语法）
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_status ON generation_history(status)
-                ''')
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_created_at ON generation_history(created_at DESC)
-                ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_status ON generation_history(status)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_created_at ON generation_history(created_at DESC)
+            ''')
             
             db_type = "Turso 云数据库" if USE_TURSO else "本地 SQLite"
             print(f"✅ 数据库初始化完成 ({db_type})")
@@ -226,10 +226,10 @@ class Database:
             return True
         except Exception as e:
             if 'UNIQUE constraint' in str(e) or 'IntegrityError' in str(e):
-                # pet_id 已存在，更新
-                return self.update_task(pet_id, status='initialized', progress=0, 
-                                       message='任务已创建', breed=breed, color=color,
-                                       species=species, weight=weight, birthday=birthday)
+            # pet_id 已存在，更新
+            return self.update_task(pet_id, status='initialized', progress=0, 
+                                   message='任务已创建', breed=breed, color=color,
+                                   species=species, weight=weight, birthday=birthday)
             print(f"❌ 创建任务失败: {e}")
             return False
     
@@ -263,11 +263,11 @@ class Database:
     def get_task(self, pet_id: str) -> Optional[Dict[str, Any]]:
         """获取任务详情"""
         try:
-            with self.get_cursor() as cursor:
-                cursor.execute('SELECT * FROM generation_history WHERE pet_id = ?', (pet_id,))
-                row = cursor.fetchone()
-                if row:
-                    return self._row_to_dict(row)
+        with self.get_cursor() as cursor:
+            cursor.execute('SELECT * FROM generation_history WHERE pet_id = ?', (pet_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(row)
         except Exception as e:
             print(f"❌ 获取任务失败: {e}")
         return None
@@ -278,35 +278,35 @@ class Database:
         offset = (page - 1) * page_size
         
         try:
-            with self.get_cursor() as cursor:
-                # 获取总数
-                if status_filter:
-                    cursor.execute('SELECT COUNT(*) FROM generation_history WHERE status = ?', 
-                                 (status_filter,))
-                else:
-                    cursor.execute('SELECT COUNT(*) FROM generation_history')
+        with self.get_cursor() as cursor:
+            # 获取总数
+            if status_filter:
+                cursor.execute('SELECT COUNT(*) FROM generation_history WHERE status = ?', 
+                             (status_filter,))
+            else:
+                cursor.execute('SELECT COUNT(*) FROM generation_history')
                 result = cursor.fetchone()
                 total = result[0] if result else 0
-                
-                # 获取分页数据
-                if status_filter:
-                    cursor.execute('''
-                        SELECT * FROM generation_history 
-                        WHERE status = ? 
-                        ORDER BY created_at DESC 
-                        LIMIT ? OFFSET ?
-                    ''', (status_filter, page_size, offset))
-                else:
-                    cursor.execute('''
-                        SELECT * FROM generation_history 
-                        ORDER BY created_at DESC 
-                        LIMIT ? OFFSET ?
-                    ''', (page_size, offset))
-                
-                rows = cursor.fetchall()
-                items = [self._row_to_dict(row) for row in rows]
             
-            return items, total
+            # 获取分页数据
+            if status_filter:
+                cursor.execute('''
+                    SELECT * FROM generation_history 
+                    WHERE status = ? 
+                    ORDER BY created_at DESC 
+                    LIMIT ? OFFSET ?
+                ''', (status_filter, page_size, offset))
+            else:
+                cursor.execute('''
+                    SELECT * FROM generation_history 
+                    ORDER BY created_at DESC 
+                    LIMIT ? OFFSET ?
+                ''', (page_size, offset))
+            
+            rows = cursor.fetchall()
+            items = [self._row_to_dict(row) for row in rows]
+        
+        return items, total
         except Exception as e:
             print(f"❌ 获取任务列表失败: {e}")
             import traceback
@@ -316,8 +316,8 @@ class Database:
     def delete_task(self, pet_id: str) -> bool:
         """删除任务"""
         try:
-            with self.get_cursor() as cursor:
-                cursor.execute('DELETE FROM generation_history WHERE pet_id = ?', (pet_id,))
+        with self.get_cursor() as cursor:
+            cursor.execute('DELETE FROM generation_history WHERE pet_id = ?', (pet_id,))
             return True
         except Exception as e:
             print(f"❌ 删除任务失败: {e}")
@@ -337,19 +337,19 @@ class Database:
             # Turso 或普通元组
             d = dict(zip(columns, row))
         else:
-            d = dict(row)
+        d = dict(row)
         
         # 解析 JSON 字段
         if 'results' in d and d['results']:
             try:
                 if isinstance(d['results'], str):
-                    d['results'] = json.loads(d['results'])
+                d['results'] = json.loads(d['results'])
             except:
                 d['results'] = {}
         if 'metadata' in d and d['metadata']:
             try:
                 if isinstance(d['metadata'], str):
-                    d['metadata'] = json.loads(d['metadata'])
+                d['metadata'] = json.loads(d['metadata'])
             except:
                 d['metadata'] = {}
         return d

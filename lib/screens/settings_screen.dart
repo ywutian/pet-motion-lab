@@ -77,7 +77,7 @@ class SettingsScreen extends StatelessWidget {
                   DropdownMenuItem(
                     value: 'kling-v2-1',
                     child: Text('kling-v2-1 - pro \$0.49'),
-                  ),
+              ),
                   DropdownMenuItem(
                     value: 'kling-v2-1-master',
                     child: Text('kling-v2-1-master - \$1.40 (最高质量)'),
@@ -116,7 +116,7 @@ class SettingsScreen extends StatelessWidget {
                     const DropdownMenuItem(
                       value: 'master',
                       child: Text('master (最高质量)'),
-                    ),
+                  ),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -177,26 +177,26 @@ class SettingsScreen extends StatelessWidget {
               
               // ========== 图片背景去除 ==========
               Container(
-                padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
                         Icon(Icons.image, color: theme.colorScheme.primary),
                         const SizedBox(width: 8),
                         Text(
                           '图片背景去除',
                           style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                        fontWeight: FontWeight.bold,
+                      ),
+                  ),
+                ],
+              ),
                     const SizedBox(height: 16),
                     
                     // 去除方式
@@ -241,10 +241,10 @@ class SettingsScreen extends StatelessWidget {
                             settings.setImageRembgModel(value);
                           }
                         },
-                      ),
+                ),
                     ],
                   ],
-                ),
+              ),
               ),
               
               const SizedBox(height: 16),
@@ -254,23 +254,23 @@ class SettingsScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
                         Icon(Icons.gif, color: theme.colorScheme.secondary),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
+                              Expanded(
+                                child: Text(
                             'GIF 背景去除',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                         Switch(
                           value: settings.gifRemovalEnabled,
                           onChanged: (value) {
@@ -283,13 +283,13 @@ class SettingsScreen extends StatelessWidget {
                     if (!settings.gifRemovalEnabled)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Text(
+                                child: Text(
                           '启用后，生成的 GIF 将自动去除背景（逐帧处理）',
-                          style: theme.textTheme.bodySmall?.copyWith(
+                                  style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                      ),
+                                  ),
+                                ),
+                              ),
                     
                     if (settings.gifRemovalEnabled) ...[
                       const SizedBox(height: 16),
@@ -301,7 +301,7 @@ class SettingsScreen extends StatelessWidget {
                           labelText: '去除方式',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.auto_fix_high),
-                        ),
+                                ),
                         items: const [
                           DropdownMenuItem(
                             value: BackgroundRemovalMethod.rembg,
@@ -317,7 +317,7 @@ class SettingsScreen extends StatelessWidget {
                             settings.setGifRemovalMethod(value);
                           }
                         },
-                      ),
+                                ),
                       
                       // 本地模型选择（仅当选择 rembg 时显示）
                       if (settings.gifRemovalMethod == BackgroundRemovalMethod.rembg) ...[
@@ -329,36 +329,36 @@ class SettingsScreen extends StatelessWidget {
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.memory),
                             helperText: 'GIF 逐帧处理，建议选择快速模型',
-                          ),
+                                ),
                           items: _buildRembgModelItems(),
                           onChanged: (value) {
                             if (value != null) {
                               settings.setGifRembgModel(value);
                             }
                           },
-                        ),
-                      ],
+                                ),
+                            ],
                       
                       const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
+                ),
+                child: Row(
+                  children: [
                             const Icon(Icons.info_outline, color: Colors.orange, size: 20),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
+                    Expanded(
+                      child: Text(
                                 'GIF 去背景会逐帧处理，耗时较长',
-                                style: theme.textTheme.bodySmall?.copyWith(
+                        style: theme.textTheme.bodySmall?.copyWith(
                                   color: Colors.orange[800],
-                                ),
-                              ),
-                            ),
+                        ),
+                      ),
+                    ),
                           ],
                         ),
                       ),
@@ -458,29 +458,29 @@ class SettingsScreen extends StatelessWidget {
       DropdownMenuItem(
         value: 'u2net',
         child: Text('u2net（高精度，推荐）'),
-      ),
+              ),
       DropdownMenuItem(
         value: 'u2net_p',
         child: Text('u2net_p（快速）'),
-      ),
-      DropdownMenuItem(
+                ),
+                  DropdownMenuItem(
         value: 'u2net_human_seg',
         child: Text('u2net_human_seg（人像优化）'),
-      ),
-      DropdownMenuItem(
+                  ),
+                  DropdownMenuItem(
         value: 'silueta',
         child: Text('silueta（超高精度）'),
-      ),
-      DropdownMenuItem(
+                  ),
+                  DropdownMenuItem(
         value: 'isnet-anime',
         child: Text('isnet-anime（动漫风格）'),
-      ),
-      DropdownMenuItem(
+                  ),
+                  DropdownMenuItem(
         value: 'birefnet-general',
         child: Text('birefnet-general（顶级精度）'),
       ),
     ];
-  }
+                  }
 
   /// 宠物种类库
   Widget _buildSpeciesLibrarySection(BuildContext context) {

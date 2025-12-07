@@ -26,8 +26,8 @@ class ToolsScreen extends StatelessWidget {
       body: ResponsiveScrollLayout(
         padding: Responsive.pagePadding(context),
         maxWidth: 1400,
-        children: [
-          // 说明卡片
+          children: [
+            // 说明卡片
           _buildInfoCard(context, theme),
           SizedBox(height: spacing * 1.5),
 
@@ -61,13 +61,13 @@ class ToolsScreen extends StatelessWidget {
           ),
           SizedBox(width: Responsive.spacing(context)),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '工具说明',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                        Text(
+                          '工具说明',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
                     fontSize: isDesktop ? 18 : 16,
                   ),
@@ -77,58 +77,58 @@ class ToolsScreen extends StatelessWidget {
                   '这里集成了所有常用的独立工具，每个工具都可以单独使用。涵盖从图片处理到视频生成的完整流程！',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.8),
-                  ),
-                ),
-              ],
-            ),
+                          ),
+                        ),
+                      ],
+                    ),
           ),
-        ],
-      ),
+                  ],
+                ),
     );
   }
 
   List<Widget> _buildToolCards(BuildContext context) {
     final tools = [
       _ToolItem(
-        title: '去除背景',
+                  title: '去除背景',
         description: '使用AI自动去除图片背景，支持多种模型选择',
-        icon: Icons.content_cut,
-        color: Colors.red,
+                  icon: Icons.content_cut,
+                  color: Colors.red,
         screen: const BackgroundRemovalTool(),
-      ),
+                ),
       _ToolItem(
-        title: '图片生成图片',
-        description: '上传图片，根据提示词生成新图片（图生图）',
-        icon: Icons.image,
-        color: Colors.purple,
+                  title: '图片生成图片',
+                  description: '上传图片，根据提示词生成新图片（图生图）',
+                  icon: Icons.image,
+                  color: Colors.purple,
         screen: const GenerateSittingPoseTool(),
-      ),
+                ),
       _ToolItem(
-        title: '图片生成视频',
+                  title: '图片生成视频',
         description: '上传一张图片，使用可灵AI生成动态视频',
-        icon: Icons.video_library,
-        color: Colors.orange,
+                  icon: Icons.video_library,
+                  color: Colors.orange,
         screen: const ImageToVideoTool(),
-      ),
+                ),
       _ToolItem(
-        title: '提取视频首尾帧',
-        description: '从视频中提取第一帧和最后一帧图片',
-        icon: Icons.image_outlined,
-        color: Colors.green,
+                  title: '提取视频首尾帧',
+                  description: '从视频中提取第一帧和最后一帧图片',
+                  icon: Icons.image_outlined,
+                  color: Colors.green,
         screen: const FrameExtractionTool(),
-      ),
+                ),
       _ToolItem(
-        title: '首尾帧生成视频',
+                  title: '首尾帧生成视频',
         description: '上传首帧和尾帧图片，生成平滑过渡视频',
-        icon: Icons.video_call,
-        color: Colors.blue,
+                  icon: Icons.video_call,
+                  color: Colors.blue,
         screen: const FramesToVideoTool(),
-      ),
+                ),
       _ToolItem(
-        title: '视频转GIF',
+                  title: '视频转GIF',
         description: '将视频文件转换为GIF动画格式',
-        icon: Icons.gif,
-        color: Colors.pink,
+                  icon: Icons.gif,
+                  color: Colors.pink,
         screen: const VideoToGifTool(),
       ),
     ];
@@ -142,9 +142,9 @@ class ToolsScreen extends StatelessWidget {
     final isMobile = Responsive.isMobile(context);
 
     return ResponsiveCard(
-      onTap: () {
-        Navigator.push(
-          context,
+                  onTap: () {
+                    Navigator.push(
+                      context,
           MaterialPageRoute(builder: (context) => tool.screen),
         );
       },
@@ -197,30 +197,30 @@ class ToolsScreen extends StatelessWidget {
   // 桌面端网格布局
   Widget _buildGridToolLayout(BuildContext context, ThemeData theme, _ToolItem tool, bool isDesktop) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
         _buildToolIcon(context, tool, size: isDesktop ? 72 : 64),
         SizedBox(height: isDesktop ? 16 : 12),
-        Text(
+          Text(
           tool.title,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.bold,
             fontSize: isDesktop ? 17 : 15,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
         const SizedBox(height: 8),
         Text(
           tool.description,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurface.withOpacity(0.7),
             fontSize: isDesktop ? 13 : 12,
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 12),
         Container(
@@ -243,9 +243,9 @@ class ToolsScreen extends StatelessWidget {
               const SizedBox(width: 4),
               Icon(Icons.arrow_forward, color: tool.color, size: 14),
             ],
+            ),
           ),
-        ),
-      ],
+        ],
     );
   }
 

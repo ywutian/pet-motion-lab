@@ -348,17 +348,17 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           ),
           // 分步模式按钮
           if (isDesktop)
-            TextButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const StepInitScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.stairs),
-              label: const Text('分步模式'),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const StepInitScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.stairs),
+            label: const Text('分步模式'),
             )
           else
             IconButton(
@@ -372,7 +372,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
               },
               icon: const Icon(Icons.stairs),
               tooltip: '分步模式',
-            ),
+          ),
         ],
       ),
       body: ResponsiveScrollLayout(
@@ -395,23 +395,23 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       rightFlex: 1,
       spacing: spacing * 2,
       leftChild: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildImageUploadSection(),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildImageUploadSection(),
         ],
       ),
       rightChild: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildConfigSection(),
+            _buildConfigSection(),
           SizedBox(height: spacing),
-          _buildGenerateButton(),
-          if (_isGenerating) ...[
+            _buildGenerateButton(),
+            if (_isGenerating) ...[
             SizedBox(height: spacing),
-            _buildProgressSection(),
+              _buildProgressSection(),
+            ],
           ],
-        ],
-      ),
+        ),
     );
   }
 
@@ -510,14 +510,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
             borderRadius: BorderRadius.circular(14),
             child: Container(
               color: theme.colorScheme.surfaceContainerHighest,
-              child: _imageBytes != null
+          child: _imageBytes != null
                   ? Center(
                       child: Image.memory(
-                        _imageBytes!,
+                  _imageBytes!,
                         fit: BoxFit.contain, // 完整显示图片，不裁切
                       ),
-                    )
-                  : const Center(child: CircularProgressIndicator()),
+                )
+              : const Center(child: CircularProgressIndicator()),
             ),
           ),
         ),
@@ -616,8 +616,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
@@ -635,8 +635,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
@@ -738,18 +738,18 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   Future<void> _selectBirthday() async {
-    if (_isGenerating) return;
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      });
-    }
+                  if (_isGenerating) return;
+                  final DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                    });
+                  }
   }
 
   Widget _buildGenerateButton() {

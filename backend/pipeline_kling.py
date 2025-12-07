@@ -22,7 +22,7 @@ from prompt_config.prompts import (
     POSES,
     get_all_transitions,
 )
-from utils.image_utils import remove_background, ensure_square
+from utils.image_utils import remove_background, ensure_square, add_white_background
 from utils.video_utils import extract_first_frame, extract_last_frame, convert_mp4_to_gif, concatenate_videos
 
 
@@ -402,21 +402,29 @@ class KlingPipeline:
 
         self._wait_interval(self.step_interval, "步骤1完成")
 
-        # ==================== 步骤2: 去背景（生成前）====================
-        self._update_status(10, "步骤2: 去除背景（第1次）...", "step2")
-        print("\n🎨 步骤2: 去除背景（生成sit前）")
+        # ==================== 步骤2: 去背景 + 添加白色背景 ====================
+        self._update_status(10, "步骤2: 去除背景并添加白色背景...", "step2")
+        print("\n🎨 步骤2: 去除背景并添加白色背景")
         transparent_path = self.pet_dir / "transparent.png"
+        white_bg_path = self.pet_dir / "white_background.png"
 
         if remove_background_flag:
             # 背景去除（不需要重试，Remove.bg API很稳定）
             remove_background(str(original_path), str(transparent_path))
             print(f"✅ 背景已去除: {transparent_path}")
+            
+            # 关键步骤：将透明背景替换为纯白色背景
+            # 这样送入图生图API时，AI看到的是白色背景的图片
+            add_white_background(str(transparent_path), str(white_bg_path))
+            print(f"✅ 已添加白色背景: {white_bg_path}")
         else:
             print(f"⚠️  跳过背景去除，直接使用原图")
             shutil.copy(str(original_path), transparent_path)
+            shutil.copy(str(original_path), white_bg_path)
             print(f"✅ 已复制原图到: {transparent_path}")
 
         results["steps"]["transparent"] = str(transparent_path)
+        results["steps"]["white_background"] = str(white_bg_path)
         save_step_result("step2", 10)
 
         self._wait_interval(self.step_interval, "步骤2完成")
@@ -424,7 +432,8 @@ class KlingPipeline:
         # ==================== 步骤3: 生成第一张基准图（sit）====================
         self._update_status(20, "步骤3: 生成基础坐姿图片（可灵API）...", "step3")
         print("\n🖼️  步骤3: 生成第一张基准图（sit）- 调用可灵API")
-        sit_image_raw = self._generate_base_image("sit", str(transparent_path))
+        # 使用白色背景的图片，确保AI生成的图片也是白色背景
+        sit_image_raw = self._generate_base_image("sit", str(white_bg_path))
         results["steps"]["base_sit_raw"] = sit_image_raw
         save_step_result("step3", 20)
 
