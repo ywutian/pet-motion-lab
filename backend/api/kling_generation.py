@@ -827,6 +827,323 @@ def run_pipeline_in_background(
         task_status[pet_id]["error"] = error_trace
 
 
+@router.post("/generate-sit")
+async def generate_sit_image_only(
+    file: UploadFile = File(...),
+    breed: str = Form(...),
+    color: str = Form(...),
+    species: str = Form(...),
+    weight: str = Form(""),
+    birthday: str = Form(""),
+    # 视频生成配置（前端设置）
+    video_model: str = Form("kling-v2-5-turbo"),
+    video_mode: str = Form("pro"),
+    video_duration: int = Form(5),
+    # 背景去除配置
+    image_removal_method: str = Form("removebg"),
+    image_rembg_model: str = Form("u2net"),
+    gif_removal_enabled: bool = Form(False),
+    gif_removal_method: str = Form("rembg"),
+    gif_rembg_model: str = Form("u2net"),
+):
+    """
+    只生成坐姿图片（阶段1）
+    
+    流程：上传图片 → 去背景 → 生成 sit 图片 → 暂停等待确认
+    
+    Returns:
+        任务ID和 sit 图片路径，用户可以确认后再继续
+    """
+    # 生成任务ID
+    pet_id = f"pet_{int(time.time())}"
+
+    # 保存上传的文件
+    upload_path = UPLOAD_DIR / f"{pet_id}_{file.filename}"
+    with open(upload_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 生成配置
+    generation_config = {
+        "video_model": video_model,
+        "video_mode": video_mode,
+        "video_duration": video_duration,
+        "image_removal_method": image_removal_method,
+        "image_rembg_model": image_rembg_model,
+        "gif_removal_enabled": gif_removal_enabled,
+        "gif_removal_method": gif_removal_method,
+        "gif_rembg_model": gif_rembg_model,
+    }
+
+    # 初始化任务状态
+    task_status[pet_id] = {
+        "status": "processing",
+        "progress": 0,
+        "message": "🚀 开始生成坐姿图片...",
+        "current_step": "init",
+        "breed": breed,
+        "color": color,
+        "species": species,
+        "weight": weight,
+        "birthday": birthday,
+        "config": generation_config,
+        "results": None,
+        "error": None,
+        "started_at": time.time(),
+        "phase": "sit_only",  # 标记为只生成 sit 阶段
+    }
+
+    # 启动后台线程执行生成流程（只到 sit 图片）
+    thread = threading.Thread(
+        target=run_sit_generation_in_background,
+        args=(pet_id, str(upload_path), breed, color, species, weight, birthday, generation_config),
+        daemon=True
+    )
+    thread.start()
+
+    print(f"📤 坐姿图片生成任务已启动: {pet_id}")
+
+    return JSONResponse({
+        "pet_id": pet_id,
+        "status": "processing",
+        "message": "🚀 正在生成坐姿图片，请稍候...",
+        "phase": "sit_only",
+        "note": "请使用 GET /api/kling/status/{pet_id} 查询进度，完成后确认再继续"
+    })
+
+
+def run_sit_generation_in_background(
+    pet_id: str,
+    upload_path: str,
+    breed: str,
+    color: str,
+    species: str,
+    weight: str = "",
+    birthday: str = "",
+    config: dict = None
+):
+    """
+    后台生成坐姿图片（只执行到 sit 图片为止）
+    """
+    if config is None:
+        config = {}
+    
+    try:
+        print(f"\n{'='*70}")
+        print(f"🎯 坐姿图片生成任务启动: {pet_id}")
+        print(f"📋 品种: {breed}, 颜色: {color}, 物种: {species}")
+        print(f"{'='*70}\n")
+
+        # 状态回调函数
+        def status_callback(progress: int, message: str, step: str = None):
+            if progress >= 0:
+                task_status[pet_id]["progress"] = progress
+            task_status[pet_id]["message"] = message
+            if step:
+                task_status[pet_id]["current_step"] = step
+
+        # 创建Pipeline实例
+        pipeline = KlingPipeline(
+            access_key=ACCESS_KEY,
+            secret_key=SECRET_KEY,
+            output_dir="output/kling_pipeline",
+            max_retries=BACKGROUND_MAX_RETRIES,
+            retry_delay=BACKGROUND_RETRY_DELAY,
+            step_interval=BACKGROUND_STEP_INTERVAL,
+            api_interval=BACKGROUND_API_INTERVAL,
+            status_callback=status_callback,
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY,
+            video_model=config.get("video_model", "kling-v2-5-turbo"),
+            video_mode=config.get("video_mode", "pro"),
+            video_duration=config.get("video_duration", 5),
+            image_removal_method=config.get("image_removal_method", "removebg"),
+            image_rembg_model=config.get("image_rembg_model", "u2net"),
+            gif_removal_enabled=config.get("gif_removal_enabled", False),
+            gif_removal_method=config.get("gif_removal_method", "rembg"),
+            gif_rembg_model=config.get("gif_rembg_model", "u2net"),
+        )
+
+        # 执行只到 sit 图片的流程
+        results = pipeline.run_sit_only_pipeline(
+            uploaded_image=upload_path,
+            breed=breed,
+            color=color,
+            species=species,
+            pet_id=pet_id,
+            weight=float(weight.replace("kg", "").replace("公斤", "").strip()) if weight else 0.0,
+            birthday=birthday
+        )
+
+        # 完成（等待确认）
+        task_status[pet_id]["status"] = "waiting_confirmation"
+        task_status[pet_id]["progress"] = 30
+        task_status[pet_id]["message"] = "✅ 坐姿图片已生成，请确认后继续"
+        task_status[pet_id]["results"] = results
+        task_status[pet_id]["phase"] = "sit_completed"
+
+        print(f"\n{'='*70}")
+        print(f"✅ 坐姿图片生成完成: {pet_id}")
+        print(f"⏸️  等待用户确认...")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        error_msg = str(e)
+        error_trace = traceback.format_exc()
+
+        print(f"\n{'='*70}")
+        print(f"❌ 坐姿图片生成失败: {pet_id}")
+        print(f"错误: {error_msg}")
+        print(f"{'='*70}\n")
+
+        task_status[pet_id]["status"] = "failed"
+        task_status[pet_id]["message"] = f"❌ 坐姿图片生成失败: {error_msg}"
+        task_status[pet_id]["error"] = error_trace
+
+
+@router.post("/continue/{pet_id}")
+async def continue_generation(pet_id: str):
+    """
+    继续生成视频（阶段2）
+    
+    在用户确认坐姿图片后，继续执行剩余的视频生成流程
+    
+    Args:
+        pet_id: 宠物任务ID
+        
+    Returns:
+        继续执行的状态
+    """
+    if pet_id not in task_status:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    task = task_status[pet_id]
+    
+    # 检查状态
+    if task.get("status") != "waiting_confirmation":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"任务状态不正确: {task.get('status')}。只有处于 waiting_confirmation 状态的任务可以继续。"
+        )
+    
+    # 更新状态
+    task_status[pet_id]["status"] = "processing"
+    task_status[pet_id]["message"] = "🚀 继续生成视频中..."
+    task_status[pet_id]["phase"] = "video_generation"
+
+    # 启动后台线程继续执行
+    thread = threading.Thread(
+        target=run_continue_generation_in_background,
+        args=(pet_id,),
+        daemon=True
+    )
+    thread.start()
+
+    print(f"📤 继续生成任务已启动: {pet_id}")
+
+    return JSONResponse({
+        "pet_id": pet_id,
+        "status": "processing",
+        "message": "🚀 继续生成视频中...",
+        "phase": "video_generation",
+        "note": "请使用 GET /api/kling/status/{pet_id} 查询进度"
+    })
+
+
+def run_continue_generation_in_background(pet_id: str):
+    """
+    后台继续生成视频（从 sit 图片开始）
+    """
+    try:
+        task = task_status[pet_id]
+        results = task.get("results", {})
+        config = task.get("config", {})
+        
+        print(f"\n{'='*70}")
+        print(f"🚀 继续生成视频任务启动: {pet_id}")
+        print(f"{'='*70}\n")
+
+        # 状态回调函数
+        def status_callback(progress: int, message: str, step: str = None):
+            if progress >= 0:
+                task_status[pet_id]["progress"] = progress
+            task_status[pet_id]["message"] = message
+            if step:
+                task_status[pet_id]["current_step"] = step
+
+        # 创建Pipeline实例
+        pipeline = KlingPipeline(
+            access_key=ACCESS_KEY,
+            secret_key=SECRET_KEY,
+            output_dir="output/kling_pipeline",
+            max_retries=BACKGROUND_MAX_RETRIES,
+            retry_delay=BACKGROUND_RETRY_DELAY,
+            step_interval=BACKGROUND_STEP_INTERVAL,
+            api_interval=BACKGROUND_API_INTERVAL,
+            status_callback=status_callback,
+            video_access_key=VIDEO_ACCESS_KEY,
+            video_secret_key=VIDEO_SECRET_KEY,
+            video_model=config.get("video_model", "kling-v2-5-turbo"),
+            video_mode=config.get("video_mode", "pro"),
+            video_duration=config.get("video_duration", 5),
+            image_removal_method=config.get("image_removal_method", "removebg"),
+            image_rembg_model=config.get("image_rembg_model", "u2net"),
+            gif_removal_enabled=config.get("gif_removal_enabled", False),
+            gif_removal_method=config.get("gif_removal_method", "rembg"),
+            gif_rembg_model=config.get("gif_rembg_model", "u2net"),
+        )
+
+        # 设置宠物信息
+        pipeline.breed = task.get("breed", "")
+        pipeline.color = task.get("color", "")
+        pipeline.species = task.get("species", "")
+
+        # 继续执行剩余流程
+        final_results = pipeline.continue_from_sit(
+            pet_id=pet_id,
+            sit_image=results.get("steps", {}).get("base_sit"),
+            existing_results=results
+        )
+
+        # 完成
+        task_status[pet_id]["status"] = "completed"
+        task_status[pet_id]["progress"] = 100
+        task_status[pet_id]["message"] = "✅ 生成完成！"
+        task_status[pet_id]["results"] = final_results
+        task_status[pet_id]["phase"] = "completed"
+
+        # 保存元数据
+        _save_metadata(pet_id, {
+            "breed": task.get("breed", ""),
+            "color": task.get("color", ""),
+            "species": task.get("species", ""),
+            "weight": task.get("weight", ""),
+            "birthday": task.get("birthday", ""),
+            "created_at": task.get("started_at", time.time()),
+            "completed_at": time.time(),
+            "status": "completed",
+            "video_model": config.get("video_model", "kling-v2-5-turbo"),
+            "video_mode": config.get("video_mode", "pro"),
+            "video_duration": config.get("video_duration", 5),
+        })
+
+        print(f"\n{'='*70}")
+        print(f"✅ 视频生成完成: {pet_id}")
+        print(f"{'='*70}\n")
+
+    except Exception as e:
+        error_msg = str(e)
+        error_trace = traceback.format_exc()
+
+        print(f"\n{'='*70}")
+        print(f"❌ 视频生成失败: {pet_id}")
+        print(f"错误: {error_msg}")
+        print(f"{'='*70}\n")
+
+        task_status[pet_id]["status"] = "failed"
+        task_status[pet_id]["message"] = f"❌ 视频生成失败: {error_msg}"
+        task_status[pet_id]["error"] = error_trace
+
+
 @router.post("/generate")
 async def generate_pet_animations(
     file: UploadFile = File(...),

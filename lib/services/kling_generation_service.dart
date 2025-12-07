@@ -192,16 +192,115 @@ class KlingGenerationService {
   }
 
   /// 轮询状态（Stream）
-  Stream<Map<String, dynamic>> pollStatus(String petId) async* {
+  /// 支持 waiting_confirmation 状态（坐姿图确认）
+  Stream<Map<String, dynamic>> pollStatus(String petId, {bool stopOnWaiting = false}) async* {
     while (true) {
       final status = await getStatus(petId);
       yield status;
 
+      // 完成或失败时停止
       if (status['status'] == 'completed' || status['status'] == 'failed') {
+        break;
+      }
+      
+      // 如果设置了 stopOnWaiting，在等待确认时也停止轮询
+      if (stopOnWaiting && status['status'] == 'waiting_confirmation') {
         break;
       }
 
       await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
+  /// 开始生成坐姿图片（阶段1）
+  /// 只生成到 sit 图片后暂停，等待用户确认
+  Future<String> startSitGeneration({
+    required CrossPlatformFile imageFile,
+    required String breed,
+    required String color,
+    required String species,
+    String? weight,
+    String? birthday,
+    GenerationConfig? config,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/generate-sit');
+      print('🌐 正在连接（坐姿图生成）: $uri');
+
+      final request = http.MultipartRequest('POST', uri);
+      request.fields['breed'] = breed;
+      request.fields['color'] = color;
+      request.fields['species'] = species;
+      if (weight != null && weight.isNotEmpty) {
+        request.fields['weight'] = weight;
+      }
+      if (birthday != null && birthday.isNotEmpty) {
+        request.fields['birthday'] = birthday;
+      }
+
+      // 添加生成配置
+      final cfg = config ?? const GenerationConfig();
+      request.fields['video_model'] = cfg.videoModel;
+      request.fields['video_mode'] = cfg.videoMode;
+      request.fields['video_duration'] = cfg.videoDuration.toString();
+      request.fields['image_removal_method'] = cfg.imageRemovalMethod;
+      request.fields['image_rembg_model'] = cfg.imageRembgModel;
+      request.fields['gif_removal_enabled'] = cfg.gifRemovalEnabled.toString();
+      request.fields['gif_removal_method'] = cfg.gifRemovalMethod;
+      request.fields['gif_rembg_model'] = cfg.gifRembgModel;
+
+      // 跨平台文件上传
+      if (imageFile.bytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          imageFile.bytes!,
+          filename: imageFile.name,
+        ));
+      } else if (imageFile.path != null && !kIsWeb) {
+        request.files.add(await http.MultipartFile.fromPath('file', imageFile.path!));
+      } else {
+        throw Exception('无效的文件数据');
+      }
+
+      print('📤 发送请求（阶段1：坐姿图生成）...');
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      print('📥 收到响应: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(responseBody);
+        print('✅ 坐姿图生成任务已创建: ${data['pet_id']}');
+        return data['pet_id'];
+      } else {
+        print('❌ 生成失败: $responseBody');
+        throw Exception('生成失败: $responseBody');
+      }
+    } catch (e) {
+      print('❌ 连接错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 继续生成视频（阶段2）
+  /// 在用户确认坐姿图片后调用
+  Future<void> continueGeneration(String petId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/continue/$petId');
+      print('🚀 继续生成视频: $uri');
+
+      final response = await http.post(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ 继续生成任务已启动: ${data['pet_id']}');
+      } else {
+        print('❌ 继续生成失败: ${response.body}');
+        throw Exception('继续生成失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 继续生成错误: $e');
+      rethrow;
     }
   }
 

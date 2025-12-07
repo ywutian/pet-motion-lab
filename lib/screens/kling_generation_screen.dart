@@ -40,6 +40,10 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   
   // 正在进行的任务（用于恢复）
   String? _processingPetId;
+  
+  // 阶段控制：等待确认坐姿图
+  bool _waitingForSitConfirmation = false;
+  String? _sitImageUrl;  // 坐姿图 URL
 
   @override
   void initState() {
@@ -245,6 +249,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       _isGenerating = true;
       _progress = 0.0;
       _statusMessage = '正在上传图片...';
+      _waitingForSitConfirmation = false;
+      _sitImageUrl = null;
     });
 
     try {
@@ -254,8 +260,8 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       // 从设置中获取生成配置
       final config = GenerationConfig.fromSettings(settings);
 
-      // 开始生成（跨平台）
-      final petId = await service.startGeneration(
+      // 阶段1：只生成坐姿图片
+      final petId = await service.startSitGeneration(
         imageFile: _selectedImage!,
         breed: _breedController.text,
         color: _colorController.text,
@@ -265,10 +271,11 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         config: config,
       );
 
-      // 轮询状态
+      _processingPetId = petId;
+
+      // 轮询状态，直到坐姿图生成完成
       _shouldStopPolling = false;
-      await for (final status in service.pollStatus(petId)) {
-        // 检查是否应该停止轮询（页面已离开）
+      await for (final status in service.pollStatus(petId, stopOnWaiting: true)) {
         if (_shouldStopPolling || !mounted) {
           debugPrint('🛑 停止轮询: shouldStop=$_shouldStopPolling, mounted=$mounted');
           break;
@@ -279,28 +286,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           _statusMessage = status['message'];
         });
 
-        // 如果是从文件系统恢复的状态，说明任务已经完成
-        if (status['from_filesystem'] == true) {
+        // 坐姿图生成完成，等待确认
+        if (status['status'] == 'waiting_confirmation') {
           if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => KlingResultScreen(petId: petId),
-              ),
-            );
-          }
-          break;
-        }
-
-        if (status['status'] == 'completed') {
-          // 生成完成，跳转到结果页面
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => KlingResultScreen(petId: petId),
-              ),
-            );
+            setState(() {
+              _waitingForSitConfirmation = true;
+              // 构建坐姿图 URL
+              _sitImageUrl = '${KlingGenerationService.baseUrl}/api/kling/download/$petId/base_images/sit.png';
+            });
           }
           break;
         } else if (status['status'] == 'failed') {
@@ -312,14 +305,90 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('生成失败: $e')),
         );
+        setState(() {
+          _isGenerating = false;
+          _waitingForSitConfirmation = false;
+        });
+      }
+    }
+  }
+
+  /// 确认坐姿图并继续生成视频
+  Future<void> _confirmAndContinue() async {
+    if (_processingPetId == null) return;
+
+    setState(() {
+      _waitingForSitConfirmation = false;
+      _statusMessage = '继续生成视频中...';
+    });
+
+    try {
+      final service = KlingGenerationService();
+      
+      // 调用继续生成 API
+      await service.continueGeneration(_processingPetId!);
+
+      // 继续轮询直到完成
+      _shouldStopPolling = false;
+      await for (final status in service.pollStatus(_processingPetId!)) {
+        if (_shouldStopPolling || !mounted) {
+          break;
+        }
+        
+        setState(() {
+          _progress = status['progress'] / 100.0;
+          _statusMessage = status['message'];
+        });
+
+        if (status['from_filesystem'] == true || status['status'] == 'completed') {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => KlingResultScreen(petId: _processingPetId!),
+              ),
+            );
+          }
+          break;
+        } else if (status['status'] == 'failed') {
+          throw Exception(status['message']);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('继续生成失败: $e')),
+        );
       }
     } finally {
       if (mounted) {
         setState(() {
           _isGenerating = false;
+          _processingPetId = null;
         });
       }
     }
+  }
+
+  /// 取消当前任务
+  Future<void> _cancelGeneration() async {
+    _shouldStopPolling = true;
+    
+    if (_processingPetId != null) {
+      try {
+        final service = KlingGenerationService();
+        await service.deleteTask(_processingPetId!);
+      } catch (e) {
+        debugPrint('删除任务失败: $e');
+      }
+    }
+    
+    setState(() {
+      _isGenerating = false;
+      _waitingForSitConfirmation = false;
+      _processingPetId = null;
+      _sitImageUrl = null;
+    });
   }
 
   @override
@@ -775,6 +844,11 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   Widget _buildProgressSection() {
     final isDesktop = Responsive.isDesktop(context);
 
+    // 如果在等待确认坐姿图
+    if (_waitingForSitConfirmation && _sitImageUrl != null) {
+      return _buildSitConfirmationSection();
+    }
+
     return FadeIn(
       child: Card(
         elevation: 2,
@@ -803,6 +877,161 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: isDesktop ? 28 : 24,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 坐姿图确认界面
+  Widget _buildSitConfirmationSection() {
+    final isDesktop = Responsive.isDesktop(context);
+    final theme = Theme.of(context);
+
+    return FadeIn(
+      child: Card(
+        elevation: 4,
+        child: Padding(
+          padding: Responsive.cardPadding(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 标题
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: theme.colorScheme.primary,
+                    size: isDesktop ? 32 : 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '坐姿图生成完成，请确认',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: isDesktop ? 22 : 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              SizedBox(height: isDesktop ? 24 : 16),
+              
+              // 坐姿图预览
+              Container(
+                height: isDesktop ? 400 : 300,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.3),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _sitImageUrl!,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: theme.colorScheme.error,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '图片加载失败',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              
+              SizedBox(height: isDesktop ? 24 : 16),
+              
+              // 提示文字
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '请检查坐姿图是否正确（姿势、背景颜色等），确认后将继续生成所有视频',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              SizedBox(height: isDesktop ? 24 : 16),
+              
+              // 操作按钮
+              Row(
+                children: [
+                  // 取消按钮
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _cancelGeneration,
+                      icon: const Icon(Icons.close),
+                      label: const Text('取消'),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          vertical: isDesktop ? 16 : 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // 确认继续按钮
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: _confirmAndContinue,
+                      icon: const Icon(Icons.check),
+                      label: const Text('确认，继续生成视频'),
+                      style: FilledButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          vertical: isDesktop ? 16 : 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
