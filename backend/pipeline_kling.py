@@ -514,8 +514,14 @@ class KlingPipeline:
 
         return results
 
-    def _generate_base_image(self, pose: str, transparent_image: str) -> str:
-        """生成基准图（图生图），带重试机制"""
+    def _generate_base_image(self, pose: str, input_image: str) -> str:
+        """
+        生成基准图（图生图），带重试机制
+        
+        Args:
+            pose: 姿势名称（sit/walk/rest/sleep）
+            input_image: 输入图片路径（应该是白色背景的图片）
+        """
         # 如果使用v3.0 prompt系统
         if self.use_v3_prompts and pose == "sit" and self.weight > 0 and self.birthday:
             from prompt_config.prompt_generator_v3 import generate_sit_prompt_v3
@@ -531,14 +537,19 @@ class KlingPipeline:
             # 使用旧版prompt
             prompt = get_base_pose_prompt(pose, self.breed, self.color, self.species)
 
+        # 获取负向提示词（排除黑色背景等）
+        negative_prompt = get_negative_prompt()
+        
         print(f"  提示词: {prompt}")
-        print(f"  使用图生图API，输入图片: {transparent_image}")
+        print(f"  负向提示词: {negative_prompt}")
+        print(f"  使用图生图API，输入图片: {input_image}")
 
         def do_generate():
-            # 使用图生图API
+            # 使用图生图API，传入负向提示词
             result = self.kling.image_to_image(
-                image_path=transparent_image,
+                image_path=input_image,
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 aspect_ratio="1:1",
                 image_count=1
             )
@@ -874,17 +885,17 @@ class KlingPipeline:
     def _sort_videos_by_transition(self, video_files: list) -> list:
         """
         根据过渡关系智能排序视频，形成连贯的动作序列
-        目标：从 sit 开始，最终回到 sit（首尾呼应）
         
-        推荐顺序（星型拓扑）:
-        sit→walk→sit→rest→sit→sleep→sit
-        或者完整循环:
-        sit→walk→rest→sleep→sit
+        核心规则：
+        1. 从 sit 开始
+        2. 每个视频的结束姿势 = 下一个视频的开始姿势（连续性）
+        3. 最终回到 sit（首尾呼应，可无缝循环）
+        
+        使用贪心算法构建连续路径
         """
         import re
-        from collections import defaultdict
         
-        # 解析文件名: name -> (start_state, end_state, file)
+        # 解析文件名: key -> file
         transitions = {}
         for f in video_files:
             name = f.stem
@@ -897,64 +908,86 @@ class KlingPipeline:
         if not transitions:
             return sorted(video_files, key=lambda x: x.name)
         
-        print(f"  🔄 构建首尾呼应的连贯序列（从sit开始，回到sit结束）...")
+        print(f"  🔄 构建连续动作序列（贪心算法）...")
+        print(f"  📦 可用过渡: {list(transitions.keys())}")
         
-        # 定义理想的播放顺序（首尾呼应）
-        # 方案1: 完整循环 sit→walk→rest→sleep→sit
-        ideal_order_1 = [
-            "sit2walk", "walk2rest", "rest2sleep", "sleep2sit"
-        ]
+        # 构建邻接表：from_pose -> [(to_pose, key), ...]
+        adjacency = {}
+        for key in transitions:
+            start, end = key.split("2")
+            if start not in adjacency:
+                adjacency[start] = []
+            adjacency[start].append((end, key))
         
-        # 方案2: 星型拓扑（更完整展示所有动作）
-        # sit→walk→sit→rest→sit→sleep→sit
-        ideal_order_2 = [
-            "sit2walk", "walk2sit",
-            "sit2rest", "rest2sit",
-            "sit2sleep", "sleep2sit"
-        ]
-        
-        # 方案3: 展示所有12个过渡（如果都有的话）
-        # 按照逻辑顺序排列，确保首尾呼应
-        ideal_order_3 = [
-            # 从sit出发
-            "sit2walk", "walk2rest", "rest2sleep", "sleep2sit",
-            # 再从sit出发走另一条路
-            "sit2rest", "rest2walk", "walk2sleep", "sleep2sit",
-            # 补充剩余的
-            "sit2sleep", "sleep2walk", "walk2sit",
-            "sleep2rest", "rest2sit"
-        ]
-        
-        # 选择最合适的顺序
-        ordered_files = []
+        # 贪心算法：从 sit 开始，尽可能多地访问过渡，最终回到 sit
+        ordered_keys = []
         used_keys = set()
+        current_pose = "sit"
         
-        # 尝试按理想顺序添加
-        for key in ideal_order_3:
-            if key in transitions and key not in used_keys:
-                ordered_files.append(transitions[key])
-                used_keys.add(key)
+        while True:
+            # 找到从当前姿势出发的所有可用过渡
+            available = []
+            if current_pose in adjacency:
+                for end_pose, key in adjacency[current_pose]:
+                    if key not in used_keys:
+                        available.append((end_pose, key))
+            
+            if not available:
+                # 没有可用的过渡了
+                break
+            
+            # 优先选择能回到 sit 的过渡（如果这是最后一个机会）
+            # 否则选择不是回到 sit 的过渡（留着最后用）
+            back_to_sit = [(e, k) for e, k in available if e == "sit"]
+            not_to_sit = [(e, k) for e, k in available if e != "sit"]
+            
+            if not_to_sit:
+                # 还有其他选择，先不回 sit
+                next_pose, next_key = not_to_sit[0]
+            elif back_to_sit:
+                # 只剩回 sit 的选择
+                next_pose, next_key = back_to_sit[0]
+            else:
+                break
+            
+            ordered_keys.append(next_key)
+            used_keys.add(next_key)
+            current_pose = next_pose
         
-        # 添加剩余的视频（按字母顺序）
+        # 如果没有回到 sit，尝试找一个能回 sit 的过渡
+        if current_pose != "sit":
+            key_to_sit = f"{current_pose}2sit"
+            if key_to_sit in transitions and key_to_sit not in used_keys:
+                ordered_keys.append(key_to_sit)
+                used_keys.add(key_to_sit)
+                current_pose = "sit"
+        
+        # 转换为文件列表
+        ordered_files = [transitions[k] for k in ordered_keys]
+        
+        # 添加未使用的视频（按字母顺序，但这些会破坏连续性）
+        remaining = []
         for key, f in sorted(transitions.items()):
             if key not in used_keys:
-                ordered_files.append(f)
-                used_keys.add(key)
+                remaining.append((key, f))
         
-        # 检查首尾是否呼应
+        if remaining:
+            print(f"  ⚠️  以下过渡无法加入连续序列: {[k for k, f in remaining]}")
+            # 不添加，因为会破坏连续性
+        
+        # 输出结果
         if ordered_files:
-            first_name = ordered_files[0].stem
-            last_name = ordered_files[-1].stem
-            first_match = re.search(r'([a-zA-Z]+)2', first_name)
-            last_match = re.search(r'2([a-zA-Z]+)', last_name)
+            first_key = ordered_keys[0] if ordered_keys else ""
+            last_key = ordered_keys[-1] if ordered_keys else ""
+            start_pose = first_key.split("2")[0] if first_key else "?"
+            end_pose = last_key.split("2")[1] if last_key else "?"
             
-            if first_match and last_match:
-                start_pose = first_match.group(1).lower()
-                end_pose = last_match.group(1).lower()
-                if start_pose == end_pose:
-                    print(f"  ✅ 首尾呼应: 从 {start_pose} 开始，回到 {end_pose} 结束")
-                else:
-                    print(f"  ⚠️  首尾不一致: 从 {start_pose} 开始，到 {end_pose} 结束")
+            print(f"  📍 序列: {' → '.join(ordered_keys)}")
+            
+            if start_pose == end_pose:
+                print(f"  ✅ 首尾呼应: 从 {start_pose} 开始，回到 {end_pose} 结束（可无缝循环）")
+            else:
+                print(f"  ⚠️  首尾不一致: 从 {start_pose} 开始，到 {end_pose} 结束")
         
         return ordered_files
 
