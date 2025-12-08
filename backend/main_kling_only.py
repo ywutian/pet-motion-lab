@@ -77,7 +77,13 @@ async def root():
 async def health_check():
     """健康检查"""
     import sys
-    
+    from config import (
+        KLING_ACCESS_KEY,
+        KLING_SECRET_KEY,
+        KLING_VIDEO_ACCESS_KEY,
+        KLING_VIDEO_SECRET_KEY,
+    )
+
     return {
         "status": "healthy",
         "python_version": sys.version,
@@ -87,6 +93,12 @@ async def health_check():
             "kling_ai": "available",
             "background_removal": "available",
             "flux_models": "disabled"
+        },
+        "api_keys": {
+            "image_access_key": f"{KLING_ACCESS_KEY[:8]}..." if KLING_ACCESS_KEY else "NOT_SET",
+            "image_secret_key": f"{KLING_SECRET_KEY[:8]}..." if KLING_SECRET_KEY else "NOT_SET",
+            "video_access_key": f"{KLING_VIDEO_ACCESS_KEY[:8]}..." if KLING_VIDEO_ACCESS_KEY else "NOT_SET",
+            "video_secret_key": f"{KLING_VIDEO_SECRET_KEY[:8]}..." if KLING_VIDEO_SECRET_KEY else "NOT_SET",
         }
     }
 
