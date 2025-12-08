@@ -32,20 +32,10 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   String _statusMessage = '';
 
   // 分步确认模式
-  bool _stepConfirmMode = false;
   String _lastStep = '';
 
   // 多模型对比模式
-  bool _multiModelMode = false;
   final List<Map<String, dynamic>> _multiModelTasks = [];
-
-  // 可用模型列表
-  static const List<Map<String, String>> _availableModels = [
-    {'model_name': 'kling-v2-5-turbo', 'mode': 'pro', 'label': 'V2.5 Turbo'},
-    {'model_name': 'kling-v2-1', 'mode': 'pro', 'label': 'V2.1 Pro'},
-    {'model_name': 'kling-v1-5', 'mode': 'pro', 'label': 'V1.5 Pro'},
-    {'model_name': 'kling-v1-6', 'mode': 'pro', 'label': 'V1.6 Pro'},
-  ];
 
   @override
   void initState() {
@@ -104,7 +94,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       _isGenerating = true;
       _progress = 0.0;
       _statusMessage = '正在上传图片...';
-      _stepConfirmMode = false;
     });
 
     try {
@@ -160,7 +149,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       _isGenerating = true;
       _progress = 0.0;
       _statusMessage = '正在上传图片...';
-      _stepConfirmMode = true;
       _lastStep = '';
     });
 
@@ -241,6 +229,7 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   }
 
   /// 多模型对比生成
+  /// 使用后端的 /generate-multi-model API，只生成一张坐姿图，然后用4个模型生成视频
   Future<void> _startMultiModelGeneration() async {
     if (!_validateInput()) return;
 
@@ -252,41 +241,40 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
 
     setState(() {
       _isGenerating = true;
-      _multiModelMode = true;
       _multiModelTasks.clear();
-      _statusMessage = '正在启动4个模型对比测试...';
+      _statusMessage = '正在启动多模型对比测试...';
     });
 
     try {
       final service = KlingGenerationService();
 
-      // 启动4个模型的任务
-      for (final model in _availableModels) {
-        final petId = await service.startGeneration(
-          imageFile: _selectedImage!,
-          breed: _breedController.text,
-          color: _colorController.text,
-          species: _species,
-          weight: _weightController.text,
-          birthday: _birthdayController.text,
-          videoModelName: model['model_name'],
-          videoModelMode: model['mode'],
-        );
+      // 调用多模型生成API（后端会先生成一张共享坐姿图，然后顺序执行4个模型）
+      final result = await service.startMultiModelGeneration(
+        imageFile: _selectedImage!,
+        breed: _breedController.text,
+        color: _colorController.text,
+        species: _species,
+        weight: _weightController.text,
+        birthday: _birthdayController.text,
+      );
 
+      // 从返回结果中提取任务列表
+      final tasks = result['tasks'] as List<dynamic>;
+      for (final task in tasks) {
         _multiModelTasks.add({
-          'petId': petId,
-          'model': model['label'],
-          'status': 'processing',
+          'petId': task['pet_id'],
+          'model': task['model_name'],
+          'status': 'pending',
           'progress': 0,
-          'message': '启动中...',
+          'message': '等待中 (队列 #${task['queue_position']})',
         });
       }
 
       setState(() {
-        _statusMessage = '已启动 ${_multiModelTasks.length} 个任务，正在并行生成...';
+        _statusMessage = '已创建 ${_multiModelTasks.length} 个任务，正在顺序执行...';
       });
 
-      // 并行轮询所有任务
+      // 轮询所有任务状态
       bool allCompleted = false;
       while (!allCompleted && mounted) {
         allCompleted = true;
@@ -296,18 +284,22 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           if (task['status'] == 'completed' || task['status'] == 'failed') continue;
 
           allCompleted = false;
-          final status = await service.getStatus(task['petId']);
+          try {
+            final status = await service.getStatus(task['petId']);
 
-          setState(() {
-            _multiModelTasks[i]['status'] = status['status'];
-            _multiModelTasks[i]['progress'] = status['progress'];
-            _multiModelTasks[i]['message'] = status['message'];
-          });
+            setState(() {
+              _multiModelTasks[i]['status'] = status['status'];
+              _multiModelTasks[i]['progress'] = status['progress'] ?? 0;
+              _multiModelTasks[i]['message'] = status['message'] ?? '';
+            });
+          } catch (e) {
+            // 忽略单个任务的查询错误
+          }
         }
 
         // 计算总进度
         final totalProgress = _multiModelTasks.fold<int>(
-          0, (sum, t) => sum + (t['progress'] as int));
+          0, (sum, t) => sum + ((t['progress'] ?? 0) as int));
         setState(() {
           _progress = totalProgress / (_multiModelTasks.length * 100);
           _statusMessage = _multiModelTasks.map((t) =>
@@ -333,7 +325,6 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
       if (mounted) {
         setState(() {
           _isGenerating = false;
-          _multiModelMode = false;
         });
       }
     }
