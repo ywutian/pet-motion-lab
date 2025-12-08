@@ -270,6 +270,12 @@ class KlingAPI:
         video_url = f"{self.base_url}/v1/videos/image2video"
         headers = self._get_auth_headers()
 
+        # 调试：打印当前使用的密钥信息
+        print(f"  🔑 视频API调试信息:")
+        print(f"     Access Key: {self.access_key}")
+        print(f"     Secret Key: {self.secret_key}")
+        print(f"     API URL: {video_url}")
+
         payload = {
             "model_name": model_name,
             "mode": mode,
@@ -279,7 +285,7 @@ class KlingAPI:
             "duration": duration,
             "aspect_ratio": aspect_ratio,
         }
-        
+
         # 添加尾帧图片（首尾帧模式）
         if tail_image_path:
             with open(tail_image_path, 'rb') as f:

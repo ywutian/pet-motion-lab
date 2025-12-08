@@ -103,6 +103,97 @@ async def health_check():
     }
 
 
+@app.get("/test-api-keys")
+async def test_api_keys():
+    """测试 API 密钥是否有效（通过调用可灵 AI 的账户接口）"""
+    import requests
+    import jwt
+    import time
+    from config import (
+        KLING_ACCESS_KEY,
+        KLING_SECRET_KEY,
+        KLING_VIDEO_ACCESS_KEY,
+        KLING_VIDEO_SECRET_KEY,
+    )
+
+    def test_key(access_key: str, secret_key: str, name: str) -> dict:
+        """测试单个密钥对"""
+        if not access_key or not secret_key:
+            return {"name": name, "status": "NOT_CONFIGURED", "error": "密钥未设置"}
+
+        try:
+            # 生成 JWT Token
+            headers = {"alg": "HS256", "typ": "JWT"}
+            payload = {
+                "iss": access_key,
+                "exp": int(time.time()) + 1800,
+                "nbf": int(time.time()) - 5
+            }
+            token = jwt.encode(payload, secret_key, headers=headers)
+
+            # 尝试调用一个简单的 API（查询任务列表）
+            test_url = "https://api-beijing.klingai.com/v1/images/generations"
+            auth_headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {token}'
+            }
+
+            # 发送一个空的 GET 请求来测试认证
+            # 注意：这里用 GET 请求查询，不会消耗额度
+            response = requests.get(
+                "https://api-beijing.klingai.com/v1/images/generations/test-invalid-id",
+                headers=auth_headers,
+                timeout=10
+            )
+
+            # 401 = 认证失败，404 = 认证成功但任务不存在（这是我们期望的）
+            if response.status_code == 404:
+                return {
+                    "name": name,
+                    "status": "VALID",
+                    "access_key": f"{access_key[:8]}...",
+                    "message": "密钥有效"
+                }
+            elif response.status_code == 401:
+                error_data = response.json() if response.text else {}
+                return {
+                    "name": name,
+                    "status": "INVALID",
+                    "access_key": f"{access_key[:8]}...",
+                    "error": error_data.get("message", response.text),
+                    "code": error_data.get("code")
+                }
+            else:
+                return {
+                    "name": name,
+                    "status": "UNKNOWN",
+                    "access_key": f"{access_key[:8]}...",
+                    "http_code": response.status_code,
+                    "response": response.text[:200]
+                }
+
+        except Exception as e:
+            return {
+                "name": name,
+                "status": "ERROR",
+                "error": str(e)
+            }
+
+    # 测试两组密钥
+    results = {
+        "image_api": test_key(KLING_ACCESS_KEY, KLING_SECRET_KEY, "图片API"),
+        "video_api": test_key(KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY, "视频API"),
+    }
+
+    # 检查两组密钥是否相同
+    if KLING_ACCESS_KEY == KLING_VIDEO_ACCESS_KEY and KLING_SECRET_KEY == KLING_VIDEO_SECRET_KEY:
+        results["note"] = "图片API和视频API使用相同的密钥"
+    else:
+        results["note"] = "图片API和视频API使用不同的密钥"
+
+    return results
+
+
 if __name__ == "__main__":
     import os
 
