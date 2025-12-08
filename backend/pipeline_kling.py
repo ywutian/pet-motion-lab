@@ -14,9 +14,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Callable, Any
 from kling_api_helper import KlingAPI
 from prompt_config.prompts import (
-    get_base_pose_prompt,
-    get_transition_prompt,
-    get_loop_prompt,
     FIRST_TRANSITIONS,
     POSES,
     get_all_transitions,
@@ -115,9 +112,22 @@ class KlingPipeline:
         status_callback: Callable = None,
         # 视频模型配置
         video_model_name: str = "kling-v2-1-master",
-        video_model_mode: str = "pro"
+        video_model_mode: str = "pro",
+        # 视频 API 密钥（可选，如果不传则与图片 API 相同）
+        video_access_key: str = None,
+        video_secret_key: str = None,
     ):
+        # 图片 API 实例
         self.kling = KlingAPI(access_key, secret_key)
+
+        # 视频 API 实例（如果提供了独立密钥则使用，否则复用图片 API 密钥）
+        if video_access_key and video_secret_key:
+            self.kling_video = KlingAPI(video_access_key, video_secret_key)
+            print("✅ 视频生成使用独立 API 密钥")
+        else:
+            self.kling_video = self.kling
+            print("ℹ️ 视频生成复用图片 API 密钥")
+
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -524,13 +534,29 @@ class KlingPipeline:
         self.gender = gender
         self.birthday = birthday
 
-        # 如果使用v3.0系统，进行智能分析
-        if self.use_v3_prompts and weight > 0 and birthday:
-            from prompt_config.intelligent_analyzer import analyze_pet_info
-            analysis = analyze_pet_info(breed, weight, birthday)
-            self.body_type = analysis["body_type"]
-            self.age_stage = analysis["age_stage"]
-            print(f"🧠 v3.0智能分析: 年龄{analysis['age_years']}岁 ({analysis['age_stage']})，体型: {self.body_type}")
+        # 如果使用v3.0系统，预先确定体型（即使没有体重/生日也要有兜底）
+        if self.use_v3_prompts:
+            from prompt_config.breed_database import get_breed_config
+            breed_config = get_breed_config(breed)
+
+            if breed_config:
+                # 默认体型：使用品种标准体型
+                self.body_type = breed_config.get("standard_size")
+            else:
+                self.body_type = None
+
+            # 如果提供了完整的体重和生日，再尝试做更精细的智能分析
+            if weight > 0 and birthday:
+                try:
+                    from prompt_config.intelligent_analyzer import analyze_pet_info
+                    analysis = analyze_pet_info(breed, weight, birthday)
+                    self.body_type = analysis.get("body_type", self.body_type)
+                    self.age_stage = analysis.get("age_stage")
+                    print(
+                        f"🧠 v3.0智能分析: 年龄{analysis['age_years']}岁 ({analysis['age_stage']})，体型: {self.body_type}"
+                    )
+                except Exception as e:
+                    print(f"⚠️ v3.0智能分析失败，使用品种标准体型: {self.body_type}，错误: {e}")
 
         self.setup_pet_directories(pet_id)
 
@@ -720,20 +746,16 @@ class KlingPipeline:
 
     def _generate_base_image(self, pose: str, transparent_image: str) -> str:
         """生成基准图（图生图），带重试机制"""
-        # 如果使用v3.0 prompt系统
-        if self.use_v3_prompts and pose == "sit" and self.weight > 0 and self.birthday:
-            from prompt_config.prompt_generator_v3 import generate_sit_prompt_v3
-            prompt = generate_sit_prompt_v3(
-                breed_name=self.breed,
-                weight=self.weight,
-                gender=self.gender,
-                birthday=self.birthday,
-                color=self.color
-            )
-            print(f"  使用v3.0 Prompt生成器 (三行格式)")
-        else:
-            # 使用旧版prompt
-            prompt = get_base_pose_prompt(pose, self.breed, self.color, self.species)
+        # 使用v3.0 prompt系统（唯一版本）始终生成三行prompt
+        from prompt_config.prompt_generator_v3 import generate_sit_prompt_v3
+        prompt = generate_sit_prompt_v3(
+            breed_name=self.breed,
+            weight=self.weight,
+            gender=self.gender,
+            birthday=self.birthday,
+            color=self.color,
+        )
+        print(f"  使用v3.0 Prompt生成器 (三行格式)")
 
         print(f"  提示词: {prompt}")
         print(f"  使用图生图API，输入图片: {transparent_image}")
@@ -829,25 +851,30 @@ class KlingPipeline:
 
     def _generate_transition_video(self, transition: str, start_image: str) -> str:
         """生成单个过渡视频，带重试机制"""
-        # 如果使用v3.0 prompt系统
-        if self.use_v3_prompts and self.body_type:
-            from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
-            prompt = generate_transition_prompt_v3(
-                transition,
-                self.breed,
-                self.body_type,
-                self.color
-            )
-        else:
-            # 使用旧版prompt
-            prompt = get_transition_prompt(transition, self.breed, self.color, self.species)
+        # 使用v3.0 prompt系统（唯一版本）
+        # 确保有体型信息（即使没有体重/生日也能工作）
+        if not getattr(self, "body_type", None):
+            from prompt_config.breed_database import get_breed_config
+            breed_config = get_breed_config(self.breed)
+            if breed_config:
+                self.body_type = breed_config.get("standard_size")
+            else:
+                self.body_type = ""
+
+        from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
+        prompt = generate_transition_prompt_v3(
+            transition,
+            self.breed,
+            self.body_type or "",
+            self.color,
+        )
 
         print(f"    提示词: {prompt}")
         print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
         def do_generate():
-            # 调用可灵AI图生视频
-            result = self.kling.image_to_video(
+            # 调用可灵AI图生视频（使用视频专用 API）
+            result = self.kling_video.image_to_video(
                 image_path=start_image,
                 prompt=prompt,
                 duration=5,
@@ -860,14 +887,14 @@ class KlingPipeline:
             print(f"    任务ID: {task_id}")
 
             # 等待完成
-            task_data = self.kling.wait_for_video_task(task_id, max_wait_seconds=600)
+            task_data = self.kling_video.wait_for_video_task(task_id, max_wait_seconds=600)
 
             # 提取视频URL
             video_url = self._extract_video_url(task_data)
 
             # 下载视频
             output_path = str(self.videos_dir / "transitions" / f"{transition}.mp4")
-            self.kling.download_video(video_url, output_path)
+            self.kling_video.download_video(video_url, output_path)
 
             return output_path
 
@@ -927,25 +954,30 @@ class KlingPipeline:
                 print(f"  ⚠️  跳过 {pose}：{pose}.png 不存在")
                 continue
 
-            # 如果使用v3.0 prompt系统
-            if self.use_v3_prompts and self.body_type:
-                from prompt_config.prompt_generator_v3 import generate_loop_prompt_v3
-                prompt = generate_loop_prompt_v3(
-                    pose,
-                    self.breed,
-                    self.body_type,
-                    self.color
-                )
-            else:
-                # 使用旧版prompt
-                prompt = get_loop_prompt(pose, self.breed, self.color, self.species)
+            # 使用v3.0 prompt系统（唯一版本）
+            # 确保有体型信息（即使没有体重/生日也能工作）
+            if not getattr(self, "body_type", None):
+                from prompt_config.breed_database import get_breed_config
+                breed_config = get_breed_config(self.breed)
+                if breed_config:
+                    self.body_type = breed_config.get("standard_size")
+                else:
+                    self.body_type = ""
+
+            from prompt_config.prompt_generator_v3 import generate_loop_prompt_v3
+            prompt = generate_loop_prompt_v3(
+                pose,
+                self.breed,
+                self.body_type or "",
+                self.color,
+            )
 
             print(f"    提示词: {prompt}")
             print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
             def do_generate(p=pose, pi=pose_image, pr=prompt):
-                # 调用可灵AI图生视频
-                result = self.kling.image_to_video(
+                # 调用可灵AI图生视频（使用视频专用 API）
+                result = self.kling_video.image_to_video(
                     image_path=pi,
                     prompt=pr,
                     duration=5,
@@ -958,14 +990,14 @@ class KlingPipeline:
                 print(f"    任务ID: {task_id}")
 
                 # 等待完成
-                task_data = self.kling.wait_for_video_task(task_id, max_wait_seconds=600)
+                task_data = self.kling_video.wait_for_video_task(task_id, max_wait_seconds=600)
 
                 # 提取视频URL
                 video_url = self._extract_video_url(task_data)
 
                 # 下载视频
                 output_path = str(self.videos_dir / "loops" / f"{p}.mp4")
-                self.kling.download_video(video_url, output_path)
+                self.kling_video.download_video(video_url, output_path)
 
                 return output_path
 

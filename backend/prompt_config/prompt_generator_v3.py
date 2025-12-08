@@ -18,7 +18,7 @@ def generate_sit_prompt_v3(
 ) -> str:
     """
     生成sit坐姿的prompt (v3.0三行格式)
-    
+
     Args:
         breed_name: 品种名（如：西高地白梗、金毛、橘猫）
         weight: 体重(kg)
@@ -26,36 +26,63 @@ def generate_sit_prompt_v3(
         birthday: 生日 "YYYY-MM-DD"
         color: 颜色描述（如：纯白色、金黄色、橘色）
         precise_pattern: 是否使用精确条纹版本（仅橘猫）
-    
+
     Returns:
         三行格式的prompt
     """
-    # 分析宠物信息
-    analysis = analyze_pet_info(breed_name, weight, birthday)
-    
-    if "error" in analysis:
-        return f"错误: {analysis['error']}"
-    
-    # 获取品种配置
-    breed_config = analysis["breed_config"]
-    body_type = analysis["body_type"]
-    species_type = analysis["species_type"]
-    
+    # 获取品种配置（即使没有体重/生日也能工作）
+    breed_config = get_breed_config(breed_name)
+
+    # 默认物种和体型
+    if breed_config:
+        species_type = breed_config["species_type"]
+        default_body_type = breed_config.get(
+            "standard_size",
+            "中型犬体型" if species_type == "狗" else "中型猫体型",
+        )
+    else:
+        # 未配置的品种，做一个通用兜底
+        species_type = "狗"
+        default_body_type = "中型犬体型"
+
+    body_type = default_body_type
+    analysis = None
+
+    # 如果提供了完整的体重和生日，尝试进行智能分析
+    if weight and weight > 0 and birthday:
+        try:
+            analysis = analyze_pet_info(breed_name, weight, birthday)
+        except Exception:
+            analysis = None
+
+    if analysis and "error" not in analysis:
+        breed_config = analysis.get("breed_config", breed_config)
+        body_type = analysis.get("body_type", default_body_type)
+        species_type = analysis.get("species_type", species_type)
+
+    # 如果仍然没有breed_config（完全未知品种），使用极简三行prompt兜底
+    if not breed_config:
+        species_name = "犬" if species_type == "狗" else "猫"
+        line1 = f"保持原图{breed_name}的{body_type}和外观特征：{color}毛发。"
+        line2 = "3D卡通动画风格，色彩明亮柔和，避免写实照片感和过强噪点。"
+        line3 = f"背景纯白色(#FFFFFF)，坐在地上抬头四处张望，镜头正对{species_name}的正前方。"
+        return f"{line1}\n{line2}\n{line3}"
+
     # 确定物种名称
     species_name = "犬" if species_type == "狗" else "猫"
-    
+
     # 生成第1行
     line1 = _generate_line1(breed_name, body_type, color, breed_config, precise_pattern)
-    
+
     # 生成第2行
     line2 = _generate_line2(breed_config, species_type)
-    
+
     # 生成第3行
     line3 = f"背景纯白色(#FFFFFF)，坐在地上抬头四处张望，镜头正对{species_name}的正前方。"
-    
+
     # 组合三行
     prompt = f"{line1}\n{line2}\n{line3}"
-    
+
     return prompt
 
 

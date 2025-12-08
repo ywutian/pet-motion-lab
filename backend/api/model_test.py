@@ -13,13 +13,22 @@ import tempfile
 import traceback
 
 from kling_api_helper import KlingAPI
-from config import KLING_ACCESS_KEY, KLING_SECRET_KEY
+from config import (
+    KLING_ACCESS_KEY,
+    KLING_SECRET_KEY,
+    KLING_VIDEO_ACCESS_KEY,
+    KLING_VIDEO_SECRET_KEY,
+)
 
 router = APIRouter(prefix="/api/kling/model-test", tags=["model-test"])
 
 # 可灵AI凭证
+# 图片 API
 ACCESS_KEY = KLING_ACCESS_KEY
 SECRET_KEY = KLING_SECRET_KEY
+# 视频 API（独立账户）
+VIDEO_ACCESS_KEY = KLING_VIDEO_ACCESS_KEY
+VIDEO_SECRET_KEY = KLING_VIDEO_SECRET_KEY
 
 # 临时目录
 TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab" / "model_test"
@@ -209,8 +218,8 @@ async def test_video_model(
             print(f"   尾帧: {tail_frame_path}")
         print(f"{'='*60}")
         
-        # 创建API实例
-        kling = KlingAPI(ACCESS_KEY, SECRET_KEY)
+        # 创建API实例（使用视频专用 API 密钥）
+        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
         
         # 读取首帧图片
         with open(first_frame_path, 'rb') as f:

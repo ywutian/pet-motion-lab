@@ -12,13 +12,22 @@ import base64
 import tempfile
 
 from kling_api_helper import KlingAPI
-from config import KLING_ACCESS_KEY, KLING_SECRET_KEY
+from config import (
+    KLING_ACCESS_KEY,
+    KLING_SECRET_KEY,
+    KLING_VIDEO_ACCESS_KEY,
+    KLING_VIDEO_SECRET_KEY,
+)
 
 router = APIRouter(prefix="/api/kling/tools", tags=["kling-tools"])
 
 # 可灵AI凭证（从环境变量读取）
+# 图片 API
 ACCESS_KEY = KLING_ACCESS_KEY
 SECRET_KEY = KLING_SECRET_KEY
+# 视频 API（独立账户）
+VIDEO_ACCESS_KEY = KLING_VIDEO_ACCESS_KEY
+VIDEO_SECRET_KEY = KLING_VIDEO_SECRET_KEY
 
 # 使用系统临时目录（Render 兼容）
 TEMP_DIR = Path(tempfile.gettempdir()) / "pet_motion_lab"
@@ -132,8 +141,8 @@ async def image_to_video(
         print(f"  输入图片: {upload_path}")
         print(f"  提示词: {prompt}")
         
-        # 调用可灵AI
-        kling = KlingAPI(ACCESS_KEY, SECRET_KEY)
+        # 调用可灵AI（使用视频专用 API 密钥）
+        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
 
         # 创建图生视频任务
         result = kling.image_to_video(
@@ -213,8 +222,8 @@ async def frames_to_video(
         print(f"  首帧: {first_frame_path}")
         print(f"  尾帧: {last_frame_path}")
 
-        # 调用可灵AI（使用首帧生成视频，提示词描述过渡）
-        kling = KlingAPI(ACCESS_KEY, SECRET_KEY)
+        # 调用可灵AI（使用视频专用 API 密钥）
+        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
 
         # 创建图生视频任务
         prompt = "平滑过渡到目标姿态，自然流畅的动画效果"
