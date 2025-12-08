@@ -1136,8 +1136,8 @@ async def get_generation_status(pet_id: str):
 
     task = task_status[pet_id].copy()
 
-    # 计算已用时间
-    if "started_at" in task:
+    # 计算已用时间（仅当 started_at 有效时）
+    if "started_at" in task and task["started_at"]:
         task["elapsed_time"] = round(time.time() - task["started_at"], 1)
         task["elapsed_time_formatted"] = _format_duration(task["elapsed_time"])
 
@@ -1710,7 +1710,10 @@ def run_multi_model_pipeline_sequential(
             task_status[pet_id]["progress"] = 30
             task_status[pet_id]["message"] = f"🎬 正在生成视频 (模型 {idx + 1}/{len(AVAILABLE_VIDEO_MODELS)})"
             task_status[pet_id]["current_step"] = "video_generation"
-            db.update_task(pet_id, status='processing', started_at=time.time())
+            # 记录该模型真正开始处理的时间
+            start_ts = time.time()
+            task_status[pet_id]["started_at"] = start_ts
+            db.update_task(pet_id, status='processing', started_at=start_ts)
 
         # 执行视频生成（步骤4-8）
         try:
@@ -1943,8 +1946,8 @@ async def get_multi_model_status(base_id: str):
             task["mode"] = model_config["mode"]
             task["price_5s"] = model_config["price_5s"]
 
-            # 计算已用时间
-            if "started_at" in task:
+            # 计算已用时间（仅当 started_at 有效时）
+            if "started_at" in task and task["started_at"]:
                 task["elapsed_time"] = round(time.time() - task["started_at"], 1)
                 task["elapsed_time_formatted"] = _format_duration(task["elapsed_time"])
 
