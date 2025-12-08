@@ -241,10 +241,7 @@ class TaskDetailScreen extends StatelessWidget {
               ),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Image.file(file, fit: BoxFit.contain), // 完整显示图片
-                ),
+                child: Image.file(file, fit: BoxFit.cover),
               ),
             ),
           Padding(
@@ -630,14 +627,11 @@ class TaskDetailScreen extends StatelessWidget {
                   if (file.existsSync()) {
                     return ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Container(
+                      child: Image.file(
+                        file,
                         width: 100,
                         height: 100,
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Image.file(
-                          file,
-                          fit: BoxFit.contain, // 完整显示图片
-                        ),
+                        fit: BoxFit.cover,
                       ),
                     );
                   }

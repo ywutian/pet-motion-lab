@@ -14,6 +14,7 @@ from api.kling_generation import router as kling_router
 from api.kling_tools import router as kling_tools_router
 from api.background_removal import router as background_router
 from api.video_trimming import router as video_router
+from api.model_test import router as model_test_router
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -36,6 +37,7 @@ app.include_router(kling_router)  # 可灵AI生成
 app.include_router(kling_tools_router)  # 可灵AI工具
 app.include_router(background_router)  # 背景去除
 app.include_router(video_router)  # 视频裁剪
+app.include_router(model_test_router)  # 模型测试
 
 # 静态文件服务（用于访问生成的图片）
 output_dir = Path("output")
@@ -62,6 +64,9 @@ async def root():
             "video_info": "/api/video/info",
             "video_trim": "/api/video/trim",
             "video_extract_frame": "/api/video/extract-frame",
+            "model_test_list": "/api/kling/model-test/models",
+            "model_test_video": "/api/kling/model-test/test-video-model",
+            "model_test_image": "/api/kling/model-test/test-image-model",
             "docs": "/docs",
             "health": "/health"
         }
@@ -72,24 +77,12 @@ async def root():
 async def health_check():
     """健康检查"""
     import sys
-    from pathlib import Path
-    
-    # 检查输出目录状态
-    output_dir = Path("output/kling_pipeline")
-    task_count = 0
-    if output_dir.exists():
-        task_count = len([d for d in output_dir.iterdir() if d.is_dir()])
     
     return {
         "status": "healthy",
         "python_version": sys.version,
         "api_version": "2.0.0",
         "mode": "kling_only",
-        "storage": {
-            "type": "memory + filesystem",
-            "output_dir": str(output_dir),
-            "task_count": task_count,
-        },
         "services": {
             "kling_ai": "available",
             "background_removal": "available",

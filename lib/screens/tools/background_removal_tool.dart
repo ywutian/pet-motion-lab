@@ -7,8 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/background_removal_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
-import '../../utils/responsive.dart';
-import '../../widgets/responsive_layout.dart';
+import '../../theme/app_spacing.dart';
 
 /// 去除背景工具
 class BackgroundRemovalTool extends StatefulWidget {
@@ -100,280 +99,100 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDesktop = Responsive.isDesktop(context);
-    final spacing = Responsive.spacing(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('✂️ 去除背景'),
-        centerTitle: !isDesktop,
       ),
-      body: ResponsiveScrollLayout(
-        padding: Responsive.pagePadding(context),
-        maxWidth: 1000,
-        children: [
-          // 说明卡片
-          _buildInfoCard(theme),
-          SizedBox(height: spacing),
-
-          // 桌面端使用两栏布局
-          if (isDesktop && (_originalImage != null || _processedImage != null))
-            _buildDesktopLayout(theme, spacing)
-          else
-            _buildMobileLayout(theme, spacing),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(ThemeData theme) {
-    return ResponsiveCard(
-      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-      child: Row(
+      body: SingleChildScrollView(
+        padding: AppSpacing.paddingLG,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          Icon(
-            Icons.info_outline,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+            // 说明
+            Card(
+              color: Colors.blue.shade50,
+              child: Padding(
+                padding: AppSpacing.paddingMD,
                 child: Text(
-              '上传图片，AI自动去除背景，保存透明背景的PNG图片',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.8),
+                  '上传图片，自动去除背景，保存透明背景的PNG图片',
+                  style: TextStyle(color: Colors.blue.shade700),
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
+            AppSpacing.vGapLG,
 
-  Widget _buildDesktopLayout(ThemeData theme, double spacing) {
-    return ResponsiveTwoColumn(
-      spacing: spacing * 2,
-      leftChild: _buildOriginalImageSection(theme, spacing),
-      rightChild: _buildProcessedImageSection(theme, spacing),
-    );
-  }
-
-  Widget _buildMobileLayout(ThemeData theme, double spacing) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // 选择图片按钮
-        _buildUploadButton(theme),
-        SizedBox(height: spacing),
+            // 选择图片按钮
+            ElevatedButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('选择图片'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+              ),
+            ),
+            AppSpacing.vGapLG,
 
             // 原图预览
             if (_originalImage != null) ...[
-          _buildImageCard(
-            theme: theme,
-            title: '原图',
-            image: _originalImage!,
-            showCheckerboard: false,
-          ),
-          SizedBox(height: spacing),
+              const Text('原图：', style: TextStyle(fontWeight: FontWeight.bold)),
+              AppSpacing.vGapSM,
+              Image.file(_originalImage!, height: 200, fit: BoxFit.contain),
+              AppSpacing.vGapLG,
 
               // 去除背景按钮
-          _buildRemoveBackgroundButton(theme),
-          SizedBox(height: spacing),
-        ],
-
-        // 处理后的图片
-        if (_processedImage != null) ...[
-          _buildImageCard(
-            theme: theme,
-            title: '去除背景后',
-            image: _processedImage!,
-            showCheckerboard: true,
-          ),
-          SizedBox(height: spacing),
-
-          // 保存按钮
-          _buildSaveButton(theme),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildOriginalImageSection(ThemeData theme, double spacing) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildUploadButton(theme),
-        if (_originalImage != null) ...[
-          SizedBox(height: spacing),
-          _buildImageCard(
-            theme: theme,
-            title: '原图',
-            image: _originalImage!,
-            showCheckerboard: false,
-            height: 350,
-          ),
-          SizedBox(height: spacing),
-          _buildRemoveBackgroundButton(theme),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildProcessedImageSection(ThemeData theme, double spacing) {
-    if (_processedImage == null) {
-      return ResponsiveCard(
-        child: SizedBox(
-          height: 350,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.image_outlined,
-                  size: 64,
-                  color: theme.colorScheme.outline.withOpacity(0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '处理结果将显示在这里',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildImageCard(
-          theme: theme,
-          title: '去除背景后',
-          image: _processedImage!,
-          showCheckerboard: true,
-          height: 350,
-        ),
-        SizedBox(height: spacing),
-        _buildSaveButton(theme),
-      ],
-    );
-  }
-
-  Widget _buildUploadButton(ThemeData theme) {
-    final isDesktop = Responsive.isDesktop(context);
-    
-    return FilledButton.icon(
-      onPressed: _pickImage,
-      icon: const Icon(Icons.upload_file),
-      label: Text(_originalImage == null ? '选择图片' : '更换图片'),
-      style: FilledButton.styleFrom(
-        padding: EdgeInsets.symmetric(vertical: isDesktop ? 20 : 16),
-        textStyle: TextStyle(
-          fontSize: isDesktop ? 16 : 14,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRemoveBackgroundButton(ThemeData theme) {
-    final isDesktop = Responsive.isDesktop(context);
-    
-    return FilledButton.icon(
+              ElevatedButton.icon(
                 onPressed: _isProcessing ? null : _removeBackground,
                 icon: _isProcessing
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.content_cut),
                 label: Text(_isProcessing ? '处理中...' : '去除背景'),
-      style: FilledButton.styleFrom(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(vertical: isDesktop ? 20 : 16),
-        textStyle: TextStyle(
-          fontSize: isDesktop ? 16 : 14,
-          fontWeight: FontWeight.w600,
+                  padding: const EdgeInsets.all(16),
                 ),
               ),
-    );
-  }
+              AppSpacing.vGapLG,
+            ],
 
-  Widget _buildSaveButton(ThemeData theme) {
-    final isDesktop = Responsive.isDesktop(context);
-    
-    return FilledButton.icon(
-      onPressed: _saveToGallery,
-      icon: const Icon(Icons.save),
-      label: const Text('保存到相册'),
-      style: FilledButton.styleFrom(
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(vertical: isDesktop ? 20 : 16),
-        textStyle: TextStyle(
-          fontSize: isDesktop ? 16 : 14,
-          fontWeight: FontWeight.w600,
+            // 处理后的图片
+            if (_processedImage != null) ...[
+              const Text('去除背景后：', style: TextStyle(fontWeight: FontWeight.bold)),
+              AppSpacing.vGapSM,
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  // 棋盘格背景，显示透明效果
+                  color: Colors.grey.shade200,
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Center(
+                  child: Image.file(_processedImage!, fit: BoxFit.contain),
+                ),
+              ),
+              AppSpacing.vGapLG,
+
+              // 保存按钮
+              ElevatedButton.icon(
+                onPressed: _saveToGallery,
+                icon: const Icon(Icons.save),
+                label: const Text('保存到相册'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
-
-  Widget _buildImageCard({
-    required ThemeData theme,
-    required String title,
-    required File image,
-    required bool showCheckerboard,
-    double? height,
-  }) {
-    final isDesktop = Responsive.isDesktop(context);
-    final effectiveHeight = height ?? (isDesktop ? 300.0 : 220.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ResponsiveCard(
-          padding: EdgeInsets.zero,
-          child: Container(
-            height: effectiveHeight,
-                decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: showCheckerboard ? null : theme.colorScheme.surfaceContainerHighest,
-                  // 棋盘格背景，显示透明效果
-              image: showCheckerboard
-                  ? const DecorationImage(
-                      image: AssetImage('assets/images/checkerboard.png'),
-                      repeat: ImageRepeat.repeat,
-                    )
-                  : null,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                color: showCheckerboard ? Colors.grey.shade200 : null,
-                child: Center(
-                  child: Image.file(
-                    image,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-                ),
-              ),
-            ],
-    );
-  }
 }
+
+

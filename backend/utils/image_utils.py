@@ -128,49 +128,6 @@ def ensure_square(input_path: str, output_path: str, size: int = 1024) -> str:
     return output_path
 
 
-def add_white_background(input_path: str, output_path: str = None) -> str:
-    """
-    将透明背景图片转换为白色背景
-    
-    Args:
-        input_path: 输入图片路径（透明PNG）
-        output_path: 输出图片路径（可选，默认覆盖原文件）
-    
-    Returns:
-        输出文件路径
-    """
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"输入文件不存在: {input_path}")
-    
-    if output_path is None:
-        output_path = input_path
-    
-    img = Image.open(input_path)
-    
-    # 如果图片有透明通道
-    if img.mode == 'RGBA':
-        # 创建白色背景
-        white_bg = Image.new('RGB', img.size, (255, 255, 255))
-        # 使用 alpha 通道作为遮罩，将原图粘贴到白色背景上
-        white_bg.paste(img, mask=img.split()[3])  # 3 是 alpha 通道
-        img = white_bg
-    elif img.mode == 'LA' or img.mode == 'PA':
-        # 灰度+透明 或 调色板+透明
-        img = img.convert('RGBA')
-        white_bg = Image.new('RGB', img.size, (255, 255, 255))
-        white_bg.paste(img, mask=img.split()[3])
-        img = white_bg
-    elif img.mode != 'RGB':
-        # 其他模式转为 RGB
-        img = img.convert('RGB')
-    
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    img.save(output_path, 'PNG')
-    
-    print(f"✅ 已添加白色背景: {output_path}")
-    return output_path
-
-
 def get_image_info(image_path: str) -> dict:
     """
     获取图片信息

@@ -18,8 +18,9 @@ class SettingsScreen extends StatelessWidget {
           ),
           SliverList(
             delegate: SliverChildListDelegate([
-              _buildVideoGenerationSection(context),
-              _buildBackgroundRemovalSection(context),
+              _buildAPIKeysSection(context),
+              _buildDefaultModelsSection(context),
+              _buildGenerationSettingsSection(context),
               _buildSpeciesLibrarySection(context),
               const SizedBox(height: 32),
             ]),
@@ -29,8 +30,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// 视频生成配置
-  Widget _buildVideoGenerationSection(BuildContext context) {
+  Widget _buildAPIKeysSection(BuildContext context) {
     final theme = Theme.of(context);
     final settings = context.watch<SettingsProvider>();
 
@@ -43,110 +43,35 @@ class SettingsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '🎬 视频生成配置',
+                '🔑 可灵AI配置',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                '配置可灵 AI 视频生成参数',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // 模型选择（仅保留支持首尾帧的模型）
-              DropdownButtonFormField<String>(
-                value: settings.videoModel,
-                decoration: const InputDecoration(
-                  labelText: '视频模型',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.movie_creation),
-                  helperText: '所有模型均支持首尾帧控制',
-                ),
-                isExpanded: true,
-                items: const [
-                  // V2.5 Turbo 系列（最新，推荐，性价比最高）
-                  DropdownMenuItem(
-                    value: 'kling-v2-5-turbo',
-                    child: Text('kling-v2-5-turbo - pro \$0.35 ⭐推荐'),
-                  ),
-                  // V2.1 系列
-                  DropdownMenuItem(
-                    value: 'kling-v2-1',
-                    child: Text('kling-v2-1 - pro \$0.49'),
-              ),
-                  DropdownMenuItem(
-                    value: 'kling-v2-1-master',
-                    child: Text('kling-v2-1-master - \$1.40 (最高质量)'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setVideoModel(value);
-                    // 如果选择 master 模型，自动设置 mode 为 master
-                    if (value.contains('master')) {
-                      settings.setVideoMode('master');
-                    } else if (settings.videoMode == 'master') {
-                      settings.setVideoMode('std');
-                    }
-                  }
-                },
-              ),
               const SizedBox(height: 16),
-              
-              // 生成模式（强制 PRO 模式以支持首尾帧）
-              DropdownButtonFormField<String>(
-                value: settings.videoModel.contains('master') ? 'master' : 'pro',
+              TextField(
                 decoration: const InputDecoration(
-                  labelText: '生成模式',
+                  labelText: 'Access Key',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.high_quality),
-                  helperText: '使用 PRO/Master 模式启用首尾帧控制',
+                  prefixIcon: Icon(Icons.key),
+                  helperText: '可灵AI访问密钥',
                 ),
-                items: [
-                  if (!settings.videoModel.contains('master'))
-                    const DropdownMenuItem(
-                      value: 'pro',
-                      child: Text('pro - 1080p (首尾帧)'),
-                    ),
-                  if (settings.videoModel.contains('master'))
-                    const DropdownMenuItem(
-                      value: 'master',
-                      child: Text('master (最高质量)'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setVideoMode(value);
-                  }
-                },
+                obscureText: true,
+                controller: TextEditingController(text: settings.klingAccessKey),
+                onChanged: (value) => settings.setKlingAccessKey(value),
               ),
-              const SizedBox(height: 16),
-              
-              // 视频时长
-              DropdownButtonFormField<int>(
-                value: settings.videoDuration,
+              const SizedBox(height: 12),
+              TextField(
                 decoration: const InputDecoration(
-                  labelText: '视频时长',
+                  labelText: 'Secret Key',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.timer),
+                  prefixIcon: Icon(Icons.lock),
+                  helperText: '可灵AI密钥',
                 ),
-                items: const [
-                  DropdownMenuItem(value: 5, child: Text('5 秒')),
-                  DropdownMenuItem(value: 10, child: Text('10 秒 (×2)')),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setVideoDuration(value);
-                  }
-                },
+                obscureText: true,
+                controller: TextEditingController(text: settings.klingSecretKey),
+                onChanged: (value) => settings.setKlingSecretKey(value),
               ),
-              
-              const SizedBox(height: 16),
-              _buildCostEstimate(context, settings),
             ],
           ),
         ),
@@ -154,8 +79,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// 背景去除配置
-  Widget _buildBackgroundRemovalSection(BuildContext context) {
+  Widget _buildDefaultModelsSection(BuildContext context) {
     final theme = Theme.of(context);
     final settings = context.watch<SettingsProvider>();
 
@@ -168,214 +92,52 @@ class SettingsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '✂️ 背景去除配置',
+                '🤖 默认模型配置',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 20),
-              
-              // ========== 图片背景去除 ==========
-              Container(
-          padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: settings.defaultStaticModel,
+                decoration: const InputDecoration(
+                  labelText: '默认静态模型',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.image),
+                  helperText: '图生图模型',
                 ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                        Icon(Icons.image, color: theme.colorScheme.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          '图片背景去除',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'kling-image',
+                    child: Text('可灵AI 图生图'),
                   ),
                 ],
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setDefaultStaticModel(value);
+                  }
+                },
               ),
-                    const SizedBox(height: 16),
-                    
-                    // 去除方式
-                    DropdownButtonFormField<BackgroundRemovalMethod>(
-                      value: settings.imageRemovalMethod,
-                      decoration: const InputDecoration(
-                        labelText: '去除方式',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.auto_fix_high),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: BackgroundRemovalMethod.removeBgApi,
-                          child: Text('Remove.bg API（推荐，效果好）'),
-                        ),
-                        DropdownMenuItem(
-                          value: BackgroundRemovalMethod.rembg,
-                          child: Text('本地 rembg（免费）'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          settings.setImageRemovalMethod(value);
-                        }
-                      },
-                    ),
-                    
-                    // 本地模型选择（仅当选择 rembg 时显示）
-                    if (settings.imageRemovalMethod == BackgroundRemovalMethod.rembg) ...[
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: settings.imageRembgModel,
-                        decoration: const InputDecoration(
-                          labelText: '本地模型',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.memory),
-                          helperText: '不同模型适用于不同场景',
-                        ),
-                        items: _buildRembgModelItems(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            settings.setImageRembgModel(value);
-                          }
-                        },
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: settings.defaultVideoModel,
+                decoration: const InputDecoration(
+                  labelText: '默认视频模型',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.video_library),
+                  helperText: '图生视频模型',
                 ),
-                    ],
-                  ],
-              ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // ========== GIF 背景去除 ==========
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(12),
-                ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                        Icon(Icons.gif, color: theme.colorScheme.secondary),
-                        const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                            'GIF 背景去除',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                        Switch(
-                          value: settings.gifRemovalEnabled,
-                          onChanged: (value) {
-                            settings.setGifRemovalEnabled(value);
-                          },
-                        ),
-                      ],
-                    ),
-                    
-                    if (!settings.gifRemovalEnabled)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                                child: Text(
-                          '启用后，生成的 GIF 将自动去除背景（逐帧处理）',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                                  ),
-                                ),
-                              ),
-                    
-                    if (settings.gifRemovalEnabled) ...[
-                      const SizedBox(height: 16),
-                      
-                      // 去除方式
-                      DropdownButtonFormField<BackgroundRemovalMethod>(
-                        value: settings.gifRemovalMethod,
-                        decoration: const InputDecoration(
-                          labelText: '去除方式',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.auto_fix_high),
-                                ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: BackgroundRemovalMethod.rembg,
-                            child: Text('本地 rembg（免费，推荐）'),
-                          ),
-                          DropdownMenuItem(
-                            value: BackgroundRemovalMethod.removeBgApi,
-                            child: Text('Remove.bg API（效果好，消耗额度）'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            settings.setGifRemovalMethod(value);
-                          }
-                        },
-                                ),
-                      
-                      // 本地模型选择（仅当选择 rembg 时显示）
-                      if (settings.gifRemovalMethod == BackgroundRemovalMethod.rembg) ...[
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: settings.gifRembgModel,
-                          decoration: const InputDecoration(
-                            labelText: '本地模型',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.memory),
-                            helperText: 'GIF 逐帧处理，建议选择快速模型',
-                                ),
-                          items: _buildRembgModelItems(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              settings.setGifRembgModel(value);
-                            }
-                          },
-                                ),
-                            ],
-                      
-                      const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                            const Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                            const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                                'GIF 去背景会逐帧处理，耗时较长',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.orange[800],
-                        ),
-                      ),
-                    ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // ========== 自动裁剪开关 ==========
-              SwitchListTile(
-                title: const Text('自动裁剪'),
-                subtitle: const Text('上传图片后自动进行背景去除'),
-                value: settings.autoCut,
-                onChanged: (value) => settings.setAutoCut(value),
-                secondary: const Icon(Icons.content_cut),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'kling-video',
+                    child: Text('可灵AI 图生视频'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setDefaultVideoModel(value);
+                  }
+                },
               ),
             ],
           ),
@@ -384,105 +146,97 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// 成本估算
-  Widget _buildCostEstimate(BuildContext context, SettingsProvider settings) {
+  Widget _buildGenerationSettingsSection(BuildContext context) {
     final theme = Theme.of(context);
-    
-    // 计算单个视频的 units
-    double unitsPerVideo;
-    switch (settings.videoModel) {
-      case 'kling-v2-5-turbo':
-        unitsPerVideo = settings.videoMode == 'std' ? 1.5 : 2.5;
-        break;
-      case 'kling-v2-1':
-        unitsPerVideo = settings.videoMode == 'std' ? 2 : 3.5;
-        break;
-      case 'kling-v2-1-master':
-        unitsPerVideo = 10;
-        break;
-      default:
-        unitsPerVideo = 2.5; // PRO 模式默认
-    }
-    
-    // 10秒视频费用翻倍
-    if (settings.videoDuration == 10) {
-      unitsPerVideo *= 2;
-    }
-    
-    // 完整生成需要 16 个视频（12 过渡 + 4 循环）
-    const totalVideos = 16;
-    final totalUnits = unitsPerVideo * totalVideos;
-    final totalCost = totalUnits * 0.14; // 1 unit ≈ $0.14
-    
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final settings = context.watch<SettingsProvider>();
+
+    return Padding(
+      padding: _sectionPadding(context, top: 0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.calculate, color: theme.colorScheme.primary, size: 20),
-              const SizedBox(width: 8),
               Text(
-                '成本估算',
-                style: theme.textTheme.titleSmall?.copyWith(
+                '🎨 生成设置',
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
                 ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: settings.defaultResolution,
+                decoration: const InputDecoration(
+                  labelText: '默认分辨率',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.aspect_ratio),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: '512x512',
+                    child: Text('512 × 512'),
+                  ),
+                  DropdownMenuItem(
+                    value: '1024x1024',
+                    child: Text('1024 × 1024'),
+                  ),
+                  DropdownMenuItem(
+                    value: '1080x1080',
+                    child: Text('1080 × 1080'),
+                  ),
+                  DropdownMenuItem(
+                    value: '1920x1080',
+                    child: Text('1920 × 1080'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setDefaultResolution(value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.timer),
+                title: const Text('默认时长'),
+                trailing: Text('${settings.defaultDuration}秒'),
+                subtitle: Slider(
+                  value: settings.defaultDuration.toDouble(),
+                  min: 3,
+                  max: 10,
+                  divisions: 7,
+                  label: '${settings.defaultDuration}秒',
+                  onChanged: (value) {
+                    settings.setDefaultDuration(value.toInt());
+                  },
+                ),
+              ),
+              DropdownButtonFormField<int>(
+                initialValue: settings.defaultFps,
+                decoration: const InputDecoration(
+                  labelText: '默认FPS',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.speed),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 24, child: Text('24 FPS')),
+                  DropdownMenuItem(value: 30, child: Text('30 FPS')),
+                  DropdownMenuItem(value: 60, child: Text('60 FPS')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    settings.setDefaultFps(value);
+                  }
+                },
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '单个视频: ${unitsPerVideo.toStringAsFixed(1)} units',
-            style: theme.textTheme.bodySmall,
-          ),
-          Text(
-            '完整生成 ($totalVideos 个视频): ${totalUnits.toStringAsFixed(0)} units ≈ \$${totalCost.toStringAsFixed(2)}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  /// 构建 rembg 模型选项
-  List<DropdownMenuItem<String>> _buildRembgModelItems() {
-    return const [
-      DropdownMenuItem(
-        value: 'u2net',
-        child: Text('u2net（高精度，推荐）'),
-              ),
-      DropdownMenuItem(
-        value: 'u2net_p',
-        child: Text('u2net_p（快速）'),
-                ),
-                  DropdownMenuItem(
-        value: 'u2net_human_seg',
-        child: Text('u2net_human_seg（人像优化）'),
-                  ),
-                  DropdownMenuItem(
-        value: 'silueta',
-        child: Text('silueta（超高精度）'),
-                  ),
-                  DropdownMenuItem(
-        value: 'isnet-anime',
-        child: Text('isnet-anime（动漫风格）'),
-                  ),
-                  DropdownMenuItem(
-        value: 'birefnet-general',
-        child: Text('birefnet-general（顶级精度）'),
-      ),
-    ];
-                  }
-
-  /// 宠物种类库
   Widget _buildSpeciesLibrarySection(BuildContext context) {
     final theme = Theme.of(context);
     final speciesProvider = context.watch<SpeciesProvider>();
@@ -505,9 +259,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '管理默认与自定义的宠物种类',
+                '管理默认与自定义的宠物种类，支持在上传与生成流程中统一使用。',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(height: 16),
@@ -544,7 +298,7 @@ class SettingsScreen extends StatelessWidget {
                           Text(
                             '（长按标签可删除）',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
                             ),
                           ),
                       ],
@@ -555,7 +309,7 @@ class SettingsScreen extends StatelessWidget {
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
                             decoration: BoxDecoration(
-                              border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+                              border: Border.all(color: theme.dividerColor.withValues(alpha: 0.3)),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(

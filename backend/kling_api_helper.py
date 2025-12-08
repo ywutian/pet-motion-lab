@@ -14,78 +14,46 @@ from pathlib import Path
 
 class KlingAPI:
     """可灵AI API封装类"""
-    
-    # API 端点
-    BASE_URL_CN = "https://api-beijing.klingai.com"  # 国内版
-    BASE_URL_GLOBAL = "https://api.klingai.com"      # 海外版
 
-    def __init__(self, access_key: str, secret_key: str, 
-                 video_access_key: str = None, video_secret_key: str = None):
-        """
-        初始化可灵API
-        
-        Args:
-            access_key: 图片API的Access Key（国内版）
-            secret_key: 图片API的Secret Key（国内版）
-            video_access_key: 视频API的Access Key（海外版），如果不提供则使用图片API的密钥
-            video_secret_key: 视频API的Secret Key（海外版），如果不提供则使用图片API的密钥
-        """
-        # 图片API凭证（国内版）
+    def __init__(self, access_key: str, secret_key: str):
         self.access_key = access_key
         self.secret_key = secret_key
-        self.base_url = self.BASE_URL_CN
-        
-        # 视频API凭证（海外版）
-        self.video_access_key = video_access_key or access_key
-        self.video_secret_key = video_secret_key or secret_key
+        self.base_url = "https://api-beijing.klingai.com"
 
         # 调试信息
         if not self.access_key:
-            print("❌ 错误: 图片API access_key 为空！")
+            print("❌ 错误: access_key 为空！")
         else:
-            print(f"✅ 图片API access_key 已设置: {self.access_key[:10]}...")
+            print(f"✅ access_key 已设置: {self.access_key[:10]}...")
 
         if not self.secret_key:
-            print("❌ 错误: 图片API secret_key 为空！")
+            print("❌ 错误: secret_key 为空！")
         else:
-            print(f"✅ 图片API secret_key 已设置: {self.secret_key[:10]}...")
-            
-        if self.video_access_key != self.access_key:
-            print(f"✅ 视频API access_key 已设置（海外版）: {self.video_access_key[:10]}...")
-            print(f"✅ 视频API secret_key 已设置（海外版）: {self.video_secret_key[:10]}...")
+            print(f"✅ secret_key 已设置: {self.secret_key[:10]}...")
 
-    def _encode_jwt_token(self, for_video: bool = False) -> str:
-        """
-        生成JWT Token（遵循可灵AI官方文档）
-        
-        Args:
-            for_video: 是否为视频API生成token（使用海外版凭证）
-        """
-        ak = self.video_access_key if for_video else self.access_key
-        sk = self.video_secret_key if for_video else self.secret_key
-        
+    def _encode_jwt_token(self) -> str:
+        """生成JWT Token（遵循可灵AI官方文档）"""
         headers = {
             "alg": "HS256",
             "typ": "JWT"
         }
         payload = {
-            "iss": ak,
+            "iss": self.access_key,
             "exp": int(time.time()) + 1800,  # 有效时间：当前时间+1800s(30min)
             "nbf": int(time.time()) - 5  # 开始生效的时间：当前时间-5秒
         }
 
         # 调试信息
-        api_type = "视频API（海外版）" if for_video else "图片API（国内版）"
-        print(f"🔐 生成JWT Token ({api_type}):")
-        print(f"   iss (access_key): {ak[:10] if ak else 'EMPTY'}...")
-        print(f"   secret_key: {sk[:10] if sk else 'EMPTY'}...")
+        print(f"🔐 生成JWT Token:")
+        print(f"   iss (access_key): {self.access_key[:10] if self.access_key else 'EMPTY'}...")
+        print(f"   secret_key: {self.secret_key[:10] if self.secret_key else 'EMPTY'}...")
 
-        token = jwt.encode(payload, sk, headers=headers)
+        token = jwt.encode(payload, self.secret_key, headers=headers)
         return token
 
-    def _get_auth_headers(self, for_video: bool = False) -> dict:
+    def _get_auth_headers(self) -> dict:
         """获取认证头"""
-        api_token = self._encode_jwt_token(for_video=for_video)
+        api_token = self._encode_jwt_token()
         return {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {api_token}'
@@ -269,12 +237,12 @@ class KlingAPI:
         negative_prompt: str = "",
         duration: int = 5,
         aspect_ratio: str = "16:9",
-        model_name: str = "kling-v2-5-turbo",
+        model_name: str = "kling-v2-1-master",
         mode: str = "pro",
         tail_image_path: str = None,
     ) -> dict:
         """
-        图生视频API（使用base64编码）
+        图生视频API（使用base64编码，支持首尾帧）
 
         Args:
             image_path: 输入图片路径（首帧）
@@ -282,14 +250,14 @@ class KlingAPI:
             negative_prompt: 负向提示词
             duration: 视频时长（秒）
             aspect_ratio: 宽高比
-            model_name: 模型名称，默认 "kling-v2-5-turbo" (最新，性价比高)
+            model_name: 模型名称，默认 "kling-v2-1-master" (大师版，最高质量)
             mode: 生成模式，"std" 标准模式(720p) 或 "pro" 专业模式(1080p)，默认 "pro"
-            tail_image_path: 尾帧图片路径（可选，V2.5-Turbo PRO / V1.5 PRO / V1.6 PRO 支持）
+            tail_image_path: 尾帧图片路径（可选，用于首尾帧模式）
 
         Returns:
             包含task_id的字典
         """
-        # 读取首帧图片并转换为base64
+        # 读取图片并转换为base64
         import base64
         with open(image_path, 'rb') as f:
             image_data = f.read()
@@ -298,9 +266,9 @@ class KlingAPI:
         print(f"  📤 首帧图片已编码为base64，大小: {len(image_base64)} 字符")
         print(f"  🎬 使用模型: {model_name} (模式: {mode})")
 
-        # 创建视频生成任务（使用海外版API）
-        video_url = f"{self.BASE_URL_GLOBAL}/v1/videos/image2video"
-        headers = self._get_auth_headers(for_video=True)  # 使用视频API凭证
+        # 创建视频生成任务
+        video_url = f"{self.base_url}/v1/videos/image2video"
+        headers = self._get_auth_headers()
 
         payload = {
             "model_name": model_name,
@@ -312,11 +280,7 @@ class KlingAPI:
             "aspect_ratio": aspect_ratio,
         }
         
-        # 如果提供了尾帧图片，添加到请求中
-        # 首尾帧功能支持的模型（PRO/Master 模式）：
-        # - kling-v2-5-turbo PRO ✅
-        # - kling-v2-1 PRO ✅
-        # - kling-v2-1-master ✅
+        # 添加尾帧图片（首尾帧模式）
         if tail_image_path:
             with open(tail_image_path, 'rb') as f:
                 tail_image_data = f.read()
@@ -352,7 +316,7 @@ class KlingAPI:
 
     def query_video_task(self, task_id: str) -> dict:
         """
-        查询视频任务状态（使用海外版API）
+        查询视频任务状态
 
         Args:
             task_id: 任务ID
@@ -360,8 +324,8 @@ class KlingAPI:
         Returns:
             任务状态信息
         """
-        url = f"{self.BASE_URL_GLOBAL}/v1/videos/image2video/{task_id}"
-        headers = self._get_auth_headers(for_video=True)  # 使用视频API凭证
+        url = f"{self.base_url}/v1/videos/image2video/{task_id}"
+        headers = self._get_auth_headers()
 
         response = requests.get(url, headers=headers, timeout=30)
 

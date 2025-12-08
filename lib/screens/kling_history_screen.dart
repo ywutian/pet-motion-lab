@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -209,13 +208,6 @@ class _HistoryCard extends StatelessWidget {
     final stats = item['stats'] ?? {};
     final preview = item['preview'] ?? {};
     final thumbnailUrl = preview['thumbnail'];
-    final progress = item['progress'] ?? 0;
-    final currentStep = item['current_step'] ?? '';
-    final filesAvailable = item['files_available'] ?? false;
-    final modelConfig = item['model_config'] ?? {};
-    final videoModel = modelConfig['video_model'] ?? '未知';
-    final videoMode = modelConfig['video_mode'] ?? '未知';
-    final videoDuration = modelConfig['video_duration'] ?? 5;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -226,63 +218,29 @@ class _HistoryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 预览图
-            Stack(
-              children: [
-                // 只有在文件可用且不是处理中时才加载图片
-                if (thumbnailUrl != null && filesAvailable && status != 'processing')
+            if (thumbnailUrl != null)
               AspectRatio(
                 aspectRatio: 16 / 9,
-                    child: Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: _buildNetworkImage('${ApiConfig.baseUrl}$thumbnailUrl'),
+                child: CachedNetworkImage(
+                  imageUrl: '${ApiConfig.baseUrl}$thumbnailUrl',
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.pets, size: 48),
+                  ),
                 ),
               )
             else
               AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            status == 'processing' ? Icons.hourglass_top : Icons.pets,
-                            size: 48,
-                            color: status == 'processing' ? Colors.orange : null,
-                          ),
-                          if (status == 'processing')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '生成中 $progress%',
-                                style: const TextStyle(color: Colors.orange, fontSize: 12),
-                              ),
-                            ),
-                          if (!filesAvailable && status == 'completed')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '文件已清理',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  color: Colors.grey[200],
+                  child: const Icon(Icons.pets, size: 48),
                 ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                // 进度条（处理中时显示）
-                if (status == 'processing')
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: LinearProgressIndicator(
-                      value: progress / 100,
-                      backgroundColor: Colors.black26,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                    ),
-                  ),
-              ],
               ),
 
             Padding(
@@ -301,82 +259,19 @@ class _HistoryCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _buildStatusBadge(context, status, progress),
+                      _buildStatusBadge(context, status),
                     ],
                   ),
                   const SizedBox(height: 8),
 
-                  // 时间和当前步骤
-                  Row(
-                    children: [
+                  // 时间
                   Text(
                     createdAt,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.grey[600],
                     ),
-                      ),
-                      if (status == 'processing' && currentStep.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            currentStep,
-                            style: const TextStyle(fontSize: 10, color: Colors.blue),
-                          ),
-                        ),
-                      ],
-                    ],
                   ),
                   const SizedBox(height: 12),
-
-                  // 模型配置信息
-                  if (videoModel != '未知') ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.purple.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.purple.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.smart_toy, size: 14, color: Colors.purple),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatModelName(videoModel),
-                            style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: videoMode == 'pro' ? Colors.amber.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              videoMode.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: videoMode == 'pro' ? Colors.amber[800] : Colors.grey[700],
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${videoDuration}s',
-                            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
 
                   // 统计信息
                   Wrap(
@@ -387,8 +282,6 @@ class _HistoryCard extends StatelessWidget {
                       _buildChip(context, Icons.gif, '${stats['gif_count'] ?? 0}个GIF'),
                       if (stats['has_concatenated_video'] == true)
                         _buildChip(context, Icons.movie, '拼接视频', color: Colors.green),
-                      if (!filesAvailable && status == 'completed')
-                        _buildChip(context, Icons.cloud_off, '文件已清理', color: Colors.orange),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -420,21 +313,7 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 
-  String _formatModelName(String model) {
-    // 简化模型名称显示（仅支持首尾帧的模型）
-    switch (model) {
-      case 'kling-v2-5-turbo':
-        return 'V2.5 Turbo ⭐';
-      case 'kling-v2-1':
-        return 'V2.1';
-      case 'kling-v2-1-master':
-        return 'V2.1 Master';
-      default:
-        return model.replaceAll('kling-', '').toUpperCase();
-    }
-  }
-
-  Widget _buildStatusBadge(BuildContext context, String status, [int progress = 0]) {
+  Widget _buildStatusBadge(BuildContext context, String status) {
     Color color;
     String text;
     IconData icon;
@@ -447,18 +326,13 @@ class _HistoryCard extends StatelessWidget {
         break;
       case 'processing':
         color = Colors.orange;
-        text = '处理中 $progress%';
+        text = '处理中';
         icon = Icons.hourglass_top;
         break;
       case 'failed':
         color = Colors.red;
         text = '失败';
         icon = Icons.error;
-        break;
-      case 'initialized':
-        color = Colors.blue;
-        text = '已创建';
-        icon = Icons.schedule;
         break;
       default:
         color = Colors.grey;
@@ -507,37 +381,6 @@ class _HistoryCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// 构建网络图片，Web 端使用 Image.network，其他平台使用 CachedNetworkImage
-  Widget _buildNetworkImage(String imageUrl) {
-    if (kIsWeb) {
-      // Web 端使用 Image.network 避免 CanvasKit 纹理问题
-      return Image.network(
-        imageUrl,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return const Center(child: CircularProgressIndicator());
-        },
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('Image load error: $error');
-          return const Center(child: Icon(Icons.pets, size: 48));
-        },
-      );
-    } else {
-      // 非 Web 端使用 CachedNetworkImage
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        fit: BoxFit.contain,
-        placeholder: (context, url) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.pets, size: 48),
-        ),
-      );
-    }
   }
 }
 

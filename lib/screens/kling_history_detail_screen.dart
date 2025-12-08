@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -64,9 +63,22 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final videoModel = _detail?['video_model_name'] ?? '';
+    final videoMode = _detail?['video_model_mode'] ?? '';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_detail?['breed'] ?? '详情'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_detail?['breed'] ?? '详情'),
+            if (videoModel.isNotEmpty)
+              Text(
+                '$videoModel ($videoMode)',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              ),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.download),
@@ -313,7 +325,7 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildNetworkImage(url),
+            CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: TextButton(
@@ -325,35 +337,6 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
         ),
       ),
     );
-  }
-
-  /// 构建网络图片，Web 端使用 Image.network，其他平台使用 CachedNetworkImage
-  Widget _buildNetworkImage(String imageUrl) {
-    if (kIsWeb) {
-      return Image.network(
-        imageUrl,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return const Center(child: CircularProgressIndicator());
-        },
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('Image load error: $error');
-          return const Center(child: Icon(Icons.error, size: 48));
-        },
-      );
-    } else {
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        fit: BoxFit.contain,
-        placeholder: (context, url) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.error, size: 48),
-        ),
-      );
-    }
   }
 
   Future<void> _openUrl(String url) async {
@@ -393,9 +376,15 @@ class _MediaCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Container(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: _buildImage(context),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                errorWidget: (context, url, error) => const Center(
+                  child: Icon(Icons.error),
+                ),
               ),
             ),
             Padding(
@@ -418,33 +407,6 @@ class _MediaCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Widget _buildImage(BuildContext context) {
-    if (kIsWeb) {
-      return Image.network(
-        imageUrl,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return const Center(child: CircularProgressIndicator());
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return const Center(child: Icon(Icons.error));
-        },
-      );
-    } else {
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        fit: BoxFit.contain,
-        placeholder: (context, url) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.error),
-        ),
-      );
-    }
   }
 }
 

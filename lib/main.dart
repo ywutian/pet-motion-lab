@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/kling_history_detail_screen.dart';
 import 'providers/task_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/species_provider.dart';
@@ -38,8 +39,16 @@ class MyApp extends StatelessWidget {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
         home: const HomeScreen(),
+        onGenerateRoute: (settings) {
+          if (settings.name == '/history-detail') {
+            final petId = settings.arguments as String;
+            return MaterialPageRoute(
+              builder: (context) => KlingHistoryDetailScreen(petId: petId),
+            );
+          }
+          return null;
+        },
       ),
     );
   }
 }
-

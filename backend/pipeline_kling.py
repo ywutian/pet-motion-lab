@@ -17,12 +17,11 @@ from prompt_config.prompts import (
     get_base_pose_prompt,
     get_transition_prompt,
     get_loop_prompt,
-    get_negative_prompt,
     FIRST_TRANSITIONS,
     POSES,
     get_all_transitions,
 )
-from utils.image_utils import remove_background, ensure_square, add_white_background
+from utils.image_utils import remove_background, ensure_square
 from utils.video_utils import extract_first_frame, extract_last_frame, convert_mp4_to_gif, concatenate_videos
 
 
@@ -114,26 +113,11 @@ class KlingPipeline:
         api_interval: int = DEFAULT_API_INTERVAL,
         # 状态回调
         status_callback: Callable = None,
-        # 视频API凭证（海外版）
-        video_access_key: str = None,
-        video_secret_key: str = None,
-        # 视频生成配置（前端设置）
-        video_model: str = "kling-v2-5-turbo",
-        video_mode: str = "pro",
-        video_duration: int = 5,
-        # 背景去除配置（前端设置）
-        image_removal_method: str = "removebg",
-        image_rembg_model: str = "u2net",
-        gif_removal_enabled: bool = False,
-        gif_removal_method: str = "rembg",
-        gif_rembg_model: str = "u2net",
+        # 视频模型配置
+        video_model_name: str = "kling-v2-1-master",
+        video_model_mode: str = "pro"
     ):
-        self.kling = KlingAPI(
-            access_key, 
-            secret_key,
-            video_access_key=video_access_key,
-            video_secret_key=video_secret_key
-        )
+        self.kling = KlingAPI(access_key, secret_key)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -145,21 +129,10 @@ class KlingPipeline:
 
         # 状态回调（用于更新任务状态）
         self.status_callback = status_callback
-        
-        # 步骤完成回调（用于保存中间结果到数据库）
-        self.step_complete_callback = None
 
-        # 视频生成配置
-        self.video_model = video_model
-        self.video_mode = video_mode
-        self.video_duration = video_duration
-
-        # 背景去除配置
-        self.image_removal_method = image_removal_method
-        self.image_rembg_model = image_rembg_model
-        self.gif_removal_enabled = gif_removal_enabled
-        self.gif_removal_method = gif_removal_method
-        self.gif_rembg_model = gif_rembg_model
+        # 视频模型配置
+        self.video_model_name = video_model_name
+        self.video_model_mode = video_model_mode
 
         # 宠物配置
         self.breed = ""
@@ -258,7 +231,8 @@ class KlingPipeline:
         breed: str,
         color: str,
         species: str,
-        pet_id: str
+        pet_id: str,
+        remove_bg_after: bool = True
     ) -> str:
         """
         步骤2: 生成基础坐姿图片
@@ -269,6 +243,7 @@ class KlingPipeline:
             color: 颜色
             species: 物种
             pet_id: 宠物ID
+            remove_bg_after: 生成后是否去除背景（默认True）
 
         Returns:
             坐姿图片路径
@@ -281,6 +256,17 @@ class KlingPipeline:
         print(f"🖼️  步骤2: 生成基础坐姿图片")
         sit_image_raw = self._generate_base_image("sit", transparent_image)
         print(f"✅ 坐姿图片已生成: {sit_image_raw}")
+
+        # 生成后去除背景
+        if remove_bg_after:
+            print(f"🎨 步骤2.5: 去除生成图片的背景")
+            sit_image_clean = str(self.images_dir / "sit_clean.png")
+            remove_background(sit_image_raw, sit_image_clean)
+            print(f"✅ sit图片背景已去除: {sit_image_clean}")
+            # 覆盖原sit.png
+            import shutil
+            shutil.copy(sit_image_clean, sit_image_raw)
+            print(f"✅ 已更新sit.png为去背景版本")
 
         return sit_image_raw
 
@@ -320,212 +306,6 @@ class KlingPipeline:
             "first_frames": first_frames,
             "last_frames": last_frames
         }
-
-    def run_sit_only_pipeline(
-        self,
-        uploaded_image: str,
-        breed: str,
-        color: str,
-        species: str,
-        pet_id: Optional[str] = None,
-        remove_background_flag: bool = True,
-        weight: float = 0.0,
-        gender: str = "",
-        birthday: str = ""
-    ) -> Dict:
-        """
-        只执行到生成坐姿图片为止（阶段1）
-        
-        流程：上传图片 → 去背景 → 生成 sit 图片 → 暂停
-        
-        Returns:
-            包含 sit 图片路径的结果字典
-        """
-        if pet_id is None:
-            pet_id = f"pet_{int(time.time())}"
-        
-        self.breed = breed
-        self.color = color
-        self.species = species
-        self.weight = weight
-        self.gender = gender
-        self.birthday = birthday
-        
-        self.setup_pet_directories(pet_id)
-
-        print("=" * 70)
-        print(f"🎯 开始生成坐姿图片: {breed}{color}{species}")
-        print(f"📁 输出目录: {self.pet_dir}")
-        print("=" * 70)
-
-        results = {
-            "pet_id": pet_id,
-            "breed": breed,
-            "color": color,
-            "species": species,
-            "steps": {}
-        }
-
-        import shutil
-        
-        # ==================== 步骤1: 保存原图 ====================
-        self._update_status(5, "步骤1: 保存原图...", "step1")
-        print("\n📤 步骤1: 保存原图")
-        original_path = self.pet_dir / "original.jpg"
-        shutil.copy(uploaded_image, original_path)
-        results["steps"]["original"] = str(original_path)
-        print(f"✅ 原图已保存: {original_path}")
-
-        self._wait_interval(self.step_interval, "步骤1完成")
-
-        # ==================== 步骤2: 去背景 + 添加白色背景 ====================
-        self._update_status(10, "步骤2: 去除背景并添加白色背景...", "step2")
-        print("\n🎨 步骤2: 去除背景并添加白色背景")
-        transparent_path = self.pet_dir / "transparent.png"
-        white_bg_path = self.pet_dir / "white_background.png"
-
-        if remove_background_flag:
-            remove_background(str(original_path), str(transparent_path))
-            print(f"✅ 背景已去除: {transparent_path}")
-            
-            add_white_background(str(transparent_path), str(white_bg_path))
-            print(f"✅ 已添加白色背景: {white_bg_path}")
-        else:
-            print(f"⚠️  跳过背景去除，直接使用原图")
-            shutil.copy(str(original_path), transparent_path)
-            shutil.copy(str(original_path), white_bg_path)
-
-        results["steps"]["transparent"] = str(transparent_path)
-        results["steps"]["white_background"] = str(white_bg_path)
-
-        self._wait_interval(self.step_interval, "步骤2完成")
-
-        # ==================== 步骤3: 生成第一张基准图（sit）====================
-        self._update_status(20, "步骤3: 生成基础坐姿图片（可灵API）...", "step3")
-        print("\n🖼️  步骤3: 生成第一张基准图（sit）- 调用可灵API")
-        sit_image_raw = self._generate_base_image("sit", str(white_bg_path))
-        results["steps"]["base_sit_raw"] = sit_image_raw
-
-        self._wait_interval(self.step_interval, "步骤3完成")
-
-        # ==================== 步骤3.5: 对sit图片进行抠图+白底处理 ====================
-        self._update_status(25, "步骤3.5: 对sit图片进行抠图+白底处理...", "step3.5")
-        print("\n📌 步骤3.5: 对sit图片进行抠图+白底处理（确保100%白色背景）")
-        
-        sit_transparent_path = str(self.images_dir / "sit_transparent.png")
-        sit_white_bg_path = str(self.images_dir / "sit.png")
-        
-        try:
-            print(f"  🎨 对 sit 图片进行抠图...")
-            remove_background(sit_image_raw, sit_transparent_path)
-            print(f"  ✅ sit 抠图完成: {sit_transparent_path}")
-            
-            print(f"  ⬜ 添加纯白色背景...")
-            add_white_background(sit_transparent_path, sit_white_bg_path)
-            print(f"  ✅ sit 白底图片: {sit_white_bg_path}")
-            
-            sit_image = sit_white_bg_path
-        except Exception as e:
-            print(f"  ⚠️ 抠图失败: {e}")
-            print(f"  ⚠️ 回退使用原始生成的sit图片")
-            sit_image = sit_image_raw
-        
-        results["steps"]["base_sit"] = sit_image
-        results["steps"]["sit_transparent"] = sit_transparent_path
-
-        self._update_status(30, "✅ 坐姿图片已生成，等待确认...", "sit_completed")
-        print("\n" + "=" * 70)
-        print("✅ 坐姿图片生成完成！")
-        print(f"📍 sit 图片: {sit_image}")
-        print("⏸️  等待用户确认后继续...")
-        print("=" * 70)
-
-        return results
-
-    def continue_from_sit(
-        self,
-        pet_id: str,
-        sit_image: str,
-        existing_results: Dict
-    ) -> Dict:
-        """
-        从坐姿图片继续执行剩余流程（阶段2）
-        
-        Args:
-            pet_id: 宠物ID
-            sit_image: 坐姿图片路径
-            existing_results: 阶段1的结果
-            
-        Returns:
-            完整的结果字典
-        """
-        self.setup_pet_directories(pet_id)
-        
-        results = existing_results.copy()
-
-        print("=" * 70)
-        print(f"🚀 继续生成视频: {self.breed}{self.color}{self.species}")
-        print(f"📁 输出目录: {self.pet_dir}")
-        print(f"📍 使用坐姿图片: {sit_image}")
-        print("=" * 70)
-
-        # ==================== 步骤4: 生成前3个过渡视频 + 提取首尾帧 ====================
-        self._update_status(35, "步骤4: 生成初始过渡视频 + 提取首尾帧...", "step4")
-        print("\n🎬 步骤4: 生成前3个过渡视频 + 提取首尾帧")
-        print("  📌 视频: sit→walk, sit→rest, rest→sleep")
-        print("  📌 提取尾帧作为其他姿势基础图: walk.png, rest.png, sleep.png")
-        print(f"  📌 使用白底图片: {sit_image}")
-        first_videos, other_poses, first_frames, last_frames = self._generate_first_transitions(sit_image)
-        results["steps"]["first_transitions"] = first_videos
-        results["steps"]["other_base_images"] = other_poses
-        results["steps"]["first_frames"] = first_frames
-        results["steps"]["last_frames"] = last_frames
-
-        self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
-        self._wait_interval(self.step_interval, "步骤4完成")
-
-        # ==================== 步骤5: 生成剩余过渡视频 ====================
-        self._update_status(55, "步骤5: 生成剩余过渡视频...", "step5")
-        print("\n🎬 步骤5: 生成剩余过渡视频")
-        remaining_videos = self._generate_remaining_transitions()
-        results["steps"]["remaining_transitions"] = remaining_videos
-
-        self._wait_interval(self.step_interval, "步骤5完成")
-
-        # ==================== 步骤6: 生成循环视频 ====================
-        self._update_status(75, "步骤6: 生成循环视频...", "step6")
-        print("\n🔄 步骤6: 生成循环视频")
-        loop_videos = self._generate_loop_videos()
-        results["steps"]["loop_videos"] = loop_videos
-
-        self._wait_interval(self.step_interval, "步骤6完成")
-
-        # ==================== 步骤7: 转换为GIF ====================
-        self._update_status(90, "步骤7: 转换视频为GIF...", "step7")
-        print("\n🎞️  步骤7: 转换所有视频为GIF")
-        gifs = self._convert_all_to_gif()
-        results["steps"]["gifs"] = gifs
-
-        self._wait_interval(self.step_interval, "步骤7完成")
-
-        # ==================== 步骤8: 拼接所有过渡视频 ====================
-        self._update_status(95, "步骤8: 拼接过渡视频...", "step8")
-        print("\n🎬 步骤8: 拼接所有过渡视频为长视频")
-        concatenated_video = self._concatenate_transition_videos()
-        results["steps"]["concatenated_video"] = concatenated_video
-
-        # 保存元数据
-        metadata_path = self.pet_dir / "metadata.json"
-        with open(metadata_path, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-
-        self._update_status(100, "✅ 完整流程完成！", "completed")
-        print("\n" + "=" * 70)
-        print("✅ 完整流程完成！")
-        print(f"📊 元数据已保存: {metadata_path}")
-        print("=" * 70)
-
-        return results
 
     def run_full_pipeline(
         self,
@@ -591,11 +371,6 @@ class KlingPipeline:
         }
 
         import shutil
-        
-        def save_step_result(step_name: str, progress: int):
-            """保存步骤结果到数据库"""
-            if self.step_complete_callback:
-                self.step_complete_callback(step_name, progress, results)
 
         # ==================== 步骤1: 保存原图 ====================
         self._update_status(5, "步骤1: 保存原图...", "step1")
@@ -604,78 +379,52 @@ class KlingPipeline:
         shutil.copy(uploaded_image, original_path)
         results["steps"]["original"] = str(original_path)
         print(f"✅ 原图已保存: {original_path}")
-        save_step_result("step1", 5)
 
         self._wait_interval(self.step_interval, "步骤1完成")
 
-        # ==================== 步骤2: 去背景 + 添加白色背景 ====================
-        self._update_status(10, "步骤2: 去除背景并添加白色背景...", "step2")
-        print("\n🎨 步骤2: 去除背景并添加白色背景")
+        # ==================== 步骤2: 去背景（生成前）====================
+        self._update_status(10, "步骤2: 去除背景（第1次）...", "step2")
+        print("\n🎨 步骤2: 去除背景（生成sit前）")
         transparent_path = self.pet_dir / "transparent.png"
-        white_bg_path = self.pet_dir / "white_background.png"
 
         if remove_background_flag:
             # 背景去除（不需要重试，Remove.bg API很稳定）
             remove_background(str(original_path), str(transparent_path))
             print(f"✅ 背景已去除: {transparent_path}")
-            
-            # 关键步骤：将透明背景替换为纯白色背景
-            # 这样送入图生图API时，AI看到的是白色背景的图片
-            add_white_background(str(transparent_path), str(white_bg_path))
-            print(f"✅ 已添加白色背景: {white_bg_path}")
         else:
             print(f"⚠️  跳过背景去除，直接使用原图")
             shutil.copy(str(original_path), transparent_path)
-            shutil.copy(str(original_path), white_bg_path)
             print(f"✅ 已复制原图到: {transparent_path}")
 
         results["steps"]["transparent"] = str(transparent_path)
-        results["steps"]["white_background"] = str(white_bg_path)
-        save_step_result("step2", 10)
 
         self._wait_interval(self.step_interval, "步骤2完成")
 
         # ==================== 步骤3: 生成第一张基准图（sit）====================
         self._update_status(20, "步骤3: 生成基础坐姿图片（可灵API）...", "step3")
         print("\n🖼️  步骤3: 生成第一张基准图（sit）- 调用可灵API")
-        # 使用白色背景的图片，确保AI生成的图片也是白色背景
-        sit_image_raw = self._generate_base_image("sit", str(white_bg_path))
+        sit_image_raw = self._generate_base_image("sit", str(transparent_path))
         results["steps"]["base_sit_raw"] = sit_image_raw
-        save_step_result("step3", 20)
 
         self._wait_interval(self.step_interval, "步骤3完成")
 
-        # ==================== 步骤3.5: 对sit图片进行抠图+白底处理，确保100%白色背景 ====================
-        self._update_status(25, "步骤3.5: 对sit图片进行抠图+白底处理...", "step3.5")
-        print("\n📌 步骤3.5: 对sit图片进行抠图+白底处理（确保100%白色背景）")
-        
-        # 问题：Kling AI 图生图可能生成黑色/灰色背景
-        # 解决：再做一次 Remove.bg 抠图 + 添加白色背景
-        sit_transparent_path = str(self.images_dir / "sit_transparent.png")
-        sit_white_bg_path = str(self.images_dir / "sit.png")  # 最终的sit图片
-        
-        try:
-            # 1. 对生成的sit图片进行抠图
-            print(f"  🎨 对 sit 图片进行抠图...")
-            remove_background(sit_image_raw, sit_transparent_path)
-            print(f"  ✅ sit 抠图完成: {sit_transparent_path}")
-            
-            # 2. 添加纯白色背景
-            print(f"  ⬜ 添加纯白色背景...")
-            add_white_background(sit_transparent_path, sit_white_bg_path)
-            print(f"  ✅ sit 白底图片: {sit_white_bg_path}")
-            
-            sit_image = sit_white_bg_path
-        except Exception as e:
-            # 如果抠图失败，回退到原始图片
-            print(f"  ⚠️ 抠图失败: {e}")
-            print(f"  ⚠️ 回退使用原始生成的sit图片")
-            sit_image = sit_image_raw
-        
+        # ==================== 步骤3.5: 去背景（生成后）====================
+        self._update_status(25, "步骤3.5: 去除生成图片背景（第2次）...", "step3.5")
+        print("\n🎨 步骤3.5: 去除sit图片的背景")
+        sit_image_clean = str(self.images_dir / "sit_clean.png")
+
+        if remove_background_flag:
+            # 背景去除（不需要重试，Remove.bg API很稳定）
+            remove_background(sit_image_raw, sit_image_clean)
+            print(f"✅ sit图片背景已去除: {sit_image_clean}")
+            # 覆盖原sit.png
+            shutil.copy(sit_image_clean, sit_image_raw)
+            print(f"✅ 已更新sit.png为去背景版本")
+        else:
+            print(f"⚠️  跳过sit图片背景去除")
+
+        sit_image = sit_image_raw  # 最终的sit图片
         results["steps"]["base_sit"] = sit_image
-        results["steps"]["sit_transparent"] = sit_transparent_path
-        print(f"✅ sit图片已保存: {sit_image}")
-        save_step_result("step3.5", 25)
 
         self._wait_interval(self.step_interval, "步骤3.5完成")
 
@@ -684,7 +433,6 @@ class KlingPipeline:
         print("\n🎬 步骤4: 生成前3个过渡视频 + 提取首尾帧")
         print("  📌 视频: sit→walk, sit→rest, rest→sleep")
         print("  📌 提取尾帧作为其他姿势基础图: walk.png, rest.png, sleep.png")
-        print(f"  📌 使用白底图片: {sit_image}")
         first_videos, other_poses, first_frames, last_frames = self._generate_first_transitions(sit_image)
         results["steps"]["first_transitions"] = first_videos
         results["steps"]["other_base_images"] = other_poses
@@ -692,7 +440,6 @@ class KlingPipeline:
         results["steps"]["last_frames"] = last_frames
 
         self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
-        save_step_result("step4", 50)
         self._wait_interval(self.step_interval, "步骤4完成")
 
         # ==================== 步骤5: 生成剩余过渡视频 ====================
@@ -700,7 +447,6 @@ class KlingPipeline:
         print("\n🎬 步骤5: 生成剩余过渡视频")
         remaining_videos = self._generate_remaining_transitions()
         results["steps"]["remaining_transitions"] = remaining_videos
-        save_step_result("step5", 70)
 
         self._wait_interval(self.step_interval, "步骤5完成")
 
@@ -709,7 +455,6 @@ class KlingPipeline:
         print("\n🔄 步骤6: 生成循环视频")
         loop_videos = self._generate_loop_videos()
         results["steps"]["loop_videos"] = loop_videos
-        save_step_result("step6", 85)
 
         self._wait_interval(self.step_interval, "步骤6完成")
 
@@ -718,7 +463,6 @@ class KlingPipeline:
         print("\n🎞️  步骤7: 转换所有视频为GIF")
         gifs = self._convert_all_to_gif()
         results["steps"]["gifs"] = gifs
-        save_step_result("step7", 92)
 
         self._wait_interval(self.step_interval, "步骤7完成")
 
@@ -727,7 +471,6 @@ class KlingPipeline:
         print("\n🎬 步骤8: 拼接所有过渡视频为长视频")
         concatenated_video = self._concatenate_transition_videos()
         results["steps"]["concatenated_video"] = concatenated_video
-        save_step_result("step8", 98)
 
         # 保存元数据
         metadata_path = self.pet_dir / "metadata.json"
@@ -742,14 +485,8 @@ class KlingPipeline:
 
         return results
 
-    def _generate_base_image(self, pose: str, input_image: str) -> str:
-        """
-        生成基准图（图生图），带重试机制
-        
-        Args:
-            pose: 姿势名称（sit/walk/rest/sleep）
-            input_image: 输入图片路径（应该是白色背景的图片）
-        """
+    def _generate_base_image(self, pose: str, transparent_image: str) -> str:
+        """生成基准图（图生图），带重试机制"""
         # 如果使用v3.0 prompt系统
         if self.use_v3_prompts and pose == "sit" and self.weight > 0 and self.birthday:
             from prompt_config.prompt_generator_v3 import generate_sit_prompt_v3
@@ -765,19 +502,14 @@ class KlingPipeline:
             # 使用旧版prompt
             prompt = get_base_pose_prompt(pose, self.breed, self.color, self.species)
 
-        # 获取负向提示词（排除黑色背景等）
-        negative_prompt = get_negative_prompt()
-        
         print(f"  提示词: {prompt}")
-        print(f"  负向提示词: {negative_prompt}")
-        print(f"  使用图生图API，输入图片: {input_image}")
+        print(f"  使用图生图API，输入图片: {transparent_image}")
 
         def do_generate():
-            # 使用图生图API，传入负向提示词
+            # 使用图生图API
             result = self.kling.image_to_image(
-                image_path=input_image,
+                image_path=transparent_image,
                 prompt=prompt,
-                negative_prompt=negative_prompt,
                 aspect_ratio="1:1",
                 image_count=1
             )
@@ -862,15 +594,8 @@ class KlingPipeline:
 
         return videos, other_poses, first_frames, last_frames
 
-    def _generate_transition_video(self, transition: str, start_image: str, end_image: str = None) -> str:
-        """
-        生成单个过渡视频，带重试机制
-        
-        Args:
-            transition: 过渡名称，如 "sit2walk"
-            start_image: 首帧图片路径
-            end_image: 尾帧图片路径（可选，如果提供则使用首尾帧模式）
-        """
+    def _generate_transition_video(self, transition: str, start_image: str) -> str:
+        """生成单个过渡视频，带重试机制"""
         # 如果使用v3.0 prompt系统
         if self.use_v3_prompts and self.body_type:
             from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
@@ -884,25 +609,18 @@ class KlingPipeline:
             # 使用旧版prompt
             prompt = get_transition_prompt(transition, self.breed, self.color, self.species)
 
-        # 获取负向提示词
-        negative_prompt = get_negative_prompt()
         print(f"    提示词: {prompt}")
-        print(f"    负向提示词: {negative_prompt}")
-        
-        if end_image:
-            print(f"    🎯 首尾帧模式: {start_image} → {end_image}")
+        print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
         def do_generate():
-            # 调用可灵AI图生视频（支持首尾帧）
+            # 调用可灵AI图生视频
             result = self.kling.image_to_video(
                 image_path=start_image,
                 prompt=prompt,
-                negative_prompt=negative_prompt,
-                duration=self.video_duration,
+                duration=5,
                 aspect_ratio="16:9",
-                model_name=self.video_model,
-                mode=self.video_mode,
-                tail_image_path=end_image  # 传入尾帧（如果有）
+                model_name=self.video_model_name,
+                mode=self.video_model_mode
             )
 
             task_id = result['task_id']
@@ -931,12 +649,7 @@ class KlingPipeline:
         return output_path
 
     def _generate_remaining_transitions(self) -> Dict:
-        """
-        生成剩余过渡视频（使用首尾帧模式）
-        
-        首尾帧模式：同时指定首帧和尾帧图片，AI 会生成从首帧到尾帧的平滑过渡
-        这样可以确保视频的结束姿势与目标姿势完全一致
-        """
+        """生成剩余9个过渡视频"""
         all_transitions = get_all_transitions()
         remaining = [t for t in all_transitions if t not in FIRST_TRANSITIONS]
 
@@ -951,21 +664,14 @@ class KlingPipeline:
 
             print(f"\n  生成 {transition}... [{idx+1}/{total}]")
 
-            # 解析起始和结束姿势
-            start_pose, end_pose = transition.split("2")
+            start_pose = transition.split("2")[0]
             start_image = str(self.images_dir / f"{start_pose}.png")
-            end_image = str(self.images_dir / f"{end_pose}.png")
 
             if not os.path.exists(start_image):
                 print(f"  ⚠️  跳过 {transition}：{start_pose}.png 不存在")
                 continue
-            
-            if not os.path.exists(end_image):
-                print(f"  ⚠️  跳过 {transition}：{end_pose}.png 不存在（无法使用首尾帧模式）")
-                continue
 
-            # 使用首尾帧模式生成视频
-            video_path = self._generate_transition_video(transition, start_image, end_image)
+            video_path = self._generate_transition_video(transition, start_image)
             videos[transition] = video_path
 
         return videos
@@ -1001,24 +707,19 @@ class KlingPipeline:
                 # 使用旧版prompt
                 prompt = get_loop_prompt(pose, self.breed, self.color, self.species)
 
-            # 获取负向提示词
-            negative_prompt = get_negative_prompt()
             print(f"    提示词: {prompt}")
-            print(f"    负向提示词: {negative_prompt}")
+            print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
-            def do_generate(p=pose, pi=pose_image, pr=prompt, np=negative_prompt):
-                # 调用可灵AI图生视频（循环视频使用首尾帧相同，实现无缝循环）
+            def do_generate(p=pose, pi=pose_image, pr=prompt):
+                # 调用可灵AI图生视频
                 result = self.kling.image_to_video(
                     image_path=pi,
                     prompt=pr,
-                    negative_prompt=np,
-                    duration=self.video_duration,
+                    duration=5,
                     aspect_ratio="16:9",
-                    model_name=self.video_model,
-                    mode=self.video_mode,
-                    tail_image_path=pi  # 尾帧与首帧相同，实现无缝循环
+                    model_name=self.video_model_name,
+                    mode=self.video_model_mode
                 )
-                print(f"    🔄 循环视频模式：首尾帧相同，可无缝循环")
 
                 task_id = result['task_id']
                 print(f"    任务ID: {task_id}")
@@ -1113,111 +814,70 @@ class KlingPipeline:
     def _sort_videos_by_transition(self, video_files: list) -> list:
         """
         根据过渡关系智能排序视频，形成连贯的动作序列
-        
-        核心规则：
-        1. 从 sit 开始
-        2. 每个视频的结束姿势 = 下一个视频的开始姿势（连续性）
-        3. 最终回到 sit（首尾呼应，可无缝循环）
-        
-        使用贪心算法构建连续路径
+        使用欧拉路径算法寻找最佳顺序
         """
         import re
+        from collections import defaultdict
         
-        # 解析文件名: key -> file
-        transitions = {}
+        # 解析文件名: name -> (start_state, end_state)
+        graph = defaultdict(list)
+        out_degree = defaultdict(int)
+        in_degree = defaultdict(int)
+        
+        valid_files = []
         for f in video_files:
             name = f.stem
+            # 匹配 pattern: something2something
             match = re.search(r'([a-zA-Z]+)2([a-zA-Z]+)', name)
             if match:
                 start, end = match.groups()
-                key = f"{start.lower()}2{end.lower()}"
-                transitions[key] = f
+                start = start.lower()
+                end = end.lower()
+                
+                graph[start].append((end, f))
+                out_degree[start] += 1
+                in_degree[end] += 1
+                valid_files.append(f)
         
-        if not transitions:
+        if not valid_files:
             return sorted(video_files, key=lambda x: x.name)
         
-        print(f"  🔄 构建连续动作序列（贪心算法）...")
-        print(f"  📦 可用过渡: {list(transitions.keys())}")
+        # 对邻接表排序
+        for node in graph:
+            graph[node].sort(key=lambda x: x[1].name)
         
-        # 构建邻接表：from_pose -> [(to_pose, key), ...]
-        adjacency = {}
-        for key in transitions:
-            start, end = key.split("2")
-            if start not in adjacency:
-                adjacency[start] = []
-            adjacency[start].append((end, key))
+        # 寻找起点（优先从sit开始）
+        start_node = 'sit' if 'sit' in out_degree else (max(out_degree, key=out_degree.get) if out_degree else None)
         
-        # 贪心算法：从 sit 开始，尽可能多地访问过渡，最终回到 sit
-        ordered_keys = []
-        used_keys = set()
-        current_pose = "sit"
+        if not start_node:
+            return sorted(video_files, key=lambda x: x.name)
         
-        while True:
-            # 找到从当前姿势出发的所有可用过渡
-            available = []
-            if current_pose in adjacency:
-                for end_pose, key in adjacency[current_pose]:
-                    if key not in used_keys:
-                        available.append((end_pose, key))
-            
-            if not available:
-                # 没有可用的过渡了
-                break
-            
-            # 优先选择能回到 sit 的过渡（如果这是最后一个机会）
-            # 否则选择不是回到 sit 的过渡（留着最后用）
-            back_to_sit = [(e, k) for e, k in available if e == "sit"]
-            not_to_sit = [(e, k) for e, k in available if e != "sit"]
-            
-            if not_to_sit:
-                # 还有其他选择，先不回 sit
-                next_pose, next_key = not_to_sit[0]
-            elif back_to_sit:
-                # 只剩回 sit 的选择
-                next_pose, next_key = back_to_sit[0]
-            else:
-                break
-            
-            ordered_keys.append(next_key)
-            used_keys.add(next_key)
-            current_pose = next_pose
+        print(f"  🔄 从 '{start_node}' 姿势开始构建连贯序列...")
         
-        # 如果没有回到 sit，尝试找一个能回 sit 的过渡
-        if current_pose != "sit":
-            key_to_sit = f"{current_pose}2sit"
-            if key_to_sit in transitions and key_to_sit not in used_keys:
-                ordered_keys.append(key_to_sit)
-                used_keys.add(key_to_sit)
-                current_pose = "sit"
+        # Hierholzer 算法寻找欧拉路径
+        path = []
+        temp_graph = {k: v[:] for k, v in graph.items()}
         
-        # 转换为文件列表
-        ordered_files = [transitions[k] for k in ordered_keys]
+        def dfs(u):
+            while temp_graph[u]:
+                v, filename = temp_graph[u].pop(0)
+                dfs(v)
+                path.append(filename)
         
-        # 添加未使用的视频（按字母顺序，但这些会破坏连续性）
-        remaining = []
-        for key, f in sorted(transitions.items()):
-            if key not in used_keys:
-                remaining.append((key, f))
+        dfs(start_node)
         
-        if remaining:
-            print(f"  ⚠️  以下过渡无法加入连续序列: {[k for k, f in remaining]}")
-            # 不添加，因为会破坏连续性
+        # 逆序
+        ordered_path = path[::-1]
         
-        # 输出结果
-        if ordered_files:
-            first_key = ordered_keys[0] if ordered_keys else ""
-            last_key = ordered_keys[-1] if ordered_keys else ""
-            start_pose = first_key.split("2")[0] if first_key else "?"
-            end_pose = last_key.split("2")[1] if last_key else "?"
-            
-            print(f"  📍 序列: {' → '.join(ordered_keys)}")
-            
-            if start_pose == end_pose:
-                print(f"  ✅ 首尾呼应: 从 {start_pose} 开始，回到 {end_pose} 结束（可无缝循环）")
-            else:
-                print(f"  ⚠️  首尾不一致: 从 {start_pose} 开始，到 {end_pose} 结束")
+        # 检查是否所有视频都包含
+        if len(ordered_path) != len(valid_files):
+            used_files = set(ordered_path)
+            leftover = [f for f in valid_files if f not in used_files]
+            if leftover:
+                print(f"  ⚠️  部分视频无法连贯连接，追加 {len(leftover)} 个视频到末尾")
+                ordered_path.extend(sorted(leftover, key=lambda x: x.name))
         
-        return ordered_files
+        return ordered_path
 
     def _extract_image_url(self, task_data: dict) -> str:
         """从任务数据中提取图片URL"""

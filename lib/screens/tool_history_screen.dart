@@ -165,10 +165,7 @@ class _ToolHistoryScreenState extends State<ToolHistoryScreen> {
                 Expanded(
                   child: exists
                       ? (item.isImage
-                          ? Container(
-                              color: Colors.grey[200],
-                              child: Image.file(file, fit: BoxFit.contain), // 完整显示图片
-                            )
+                          ? Image.file(file, fit: BoxFit.cover)
                           : Stack(fit: StackFit.expand, children: [
                               Container(color: Colors.black,
                                 child: const Icon(Icons.play_circle_outline, size: 48, color: Colors.white))]))

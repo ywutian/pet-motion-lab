@@ -4,47 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/cross_platform_file.dart';
-import '../providers/settings_provider.dart';
-
-/// 生成配置（从 SettingsProvider 获取）
-/// 仅支持首尾帧的模型: kling-v2-5-turbo / kling-v2-1 / kling-v2-1-master
-class GenerationConfig {
-  final String videoModel;
-  final String videoMode;
-  final int videoDuration;
-  final String imageRemovalMethod;
-  final String imageRembgModel;
-  final bool gifRemovalEnabled;
-  final String gifRemovalMethod;
-  final String gifRembgModel;
-
-  const GenerationConfig({
-    this.videoModel = 'kling-v2-5-turbo',  // 默认使用性价比最高的模型
-    this.videoMode = 'pro',                 // PRO 模式支持首尾帧
-    this.videoDuration = 5,
-    this.imageRemovalMethod = 'removebg',
-    this.imageRembgModel = 'u2net',
-    this.gifRemovalEnabled = false,
-    this.gifRemovalMethod = 'rembg',
-    this.gifRembgModel = 'u2net',
-  });
-
-  /// 从 SettingsProvider 创建配置
-  factory GenerationConfig.fromSettings(SettingsProvider settings) {
-    return GenerationConfig(
-      videoModel: settings.videoModel,
-      videoMode: settings.videoMode,
-      videoDuration: settings.videoDuration,
-      imageRemovalMethod: settings.imageRemovalMethod == BackgroundRemovalMethod.rembg 
-          ? 'rembg' : 'removebg',
-      imageRembgModel: settings.imageRembgModel,
-      gifRemovalEnabled: settings.gifRemovalEnabled,
-      gifRemovalMethod: settings.gifRemovalMethod == BackgroundRemovalMethod.rembg 
-          ? 'rembg' : 'removebg',
-      gifRembgModel: settings.gifRembgModel,
-    );
-  }
-}
 
 class KlingGenerationService {
   // 使用统一的 API 配置
@@ -58,7 +17,8 @@ class KlingGenerationService {
     required String species,
     String? weight,
     String? birthday,
-    GenerationConfig? config,
+    String? videoModelName,
+    String? videoModelMode,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/kling/generate');
@@ -74,17 +34,12 @@ class KlingGenerationService {
       if (birthday != null && birthday.isNotEmpty) {
         request.fields['birthday'] = birthday;
       }
-
-      // 添加生成配置
-      final cfg = config ?? const GenerationConfig();
-      request.fields['video_model'] = cfg.videoModel;
-      request.fields['video_mode'] = cfg.videoMode;
-      request.fields['video_duration'] = cfg.videoDuration.toString();
-      request.fields['image_removal_method'] = cfg.imageRemovalMethod;
-      request.fields['image_rembg_model'] = cfg.imageRembgModel;
-      request.fields['gif_removal_enabled'] = cfg.gifRemovalEnabled.toString();
-      request.fields['gif_removal_method'] = cfg.gifRemovalMethod;
-      request.fields['gif_rembg_model'] = cfg.gifRembgModel;
+      if (videoModelName != null && videoModelName.isNotEmpty) {
+        request.fields['video_model_name'] = videoModelName;
+      }
+      if (videoModelMode != null && videoModelMode.isNotEmpty) {
+        request.fields['video_model_mode'] = videoModelMode;
+      }
 
       // 跨平台文件上传
       if (imageFile.bytes != null) {
@@ -102,7 +57,6 @@ class KlingGenerationService {
       }
 
       print('📤 发送请求...');
-      print('🎬 配置: 模型=${cfg.videoModel}, 模式=${cfg.videoMode}, 时长=${cfg.videoDuration}s');
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
@@ -131,7 +85,6 @@ class KlingGenerationService {
     required String species,
     String? weight,
     String? birthday,
-    GenerationConfig? config,
   }) async {
     return startGeneration(
       imageFile: CrossPlatformFile(
@@ -143,7 +96,6 @@ class KlingGenerationService {
       species: species,
       weight: weight,
       birthday: birthday,
-      config: config,
     );
   }
 
@@ -192,115 +144,16 @@ class KlingGenerationService {
   }
 
   /// 轮询状态（Stream）
-  /// 支持 waiting_confirmation 状态（坐姿图确认）
-  Stream<Map<String, dynamic>> pollStatus(String petId, {bool stopOnWaiting = false}) async* {
+  Stream<Map<String, dynamic>> pollStatus(String petId) async* {
     while (true) {
       final status = await getStatus(petId);
       yield status;
 
-      // 完成或失败时停止
       if (status['status'] == 'completed' || status['status'] == 'failed') {
-        break;
-      }
-      
-      // 如果设置了 stopOnWaiting，在等待确认时也停止轮询
-      if (stopOnWaiting && status['status'] == 'waiting_confirmation') {
         break;
       }
 
       await Future.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  /// 开始生成坐姿图片（阶段1）
-  /// 只生成到 sit 图片后暂停，等待用户确认
-  Future<String> startSitGeneration({
-    required CrossPlatformFile imageFile,
-    required String breed,
-    required String color,
-    required String species,
-    String? weight,
-    String? birthday,
-    GenerationConfig? config,
-  }) async {
-    try {
-      final uri = Uri.parse('$baseUrl/api/kling/generate-sit');
-      print('🌐 正在连接（坐姿图生成）: $uri');
-
-      final request = http.MultipartRequest('POST', uri);
-      request.fields['breed'] = breed;
-      request.fields['color'] = color;
-      request.fields['species'] = species;
-      if (weight != null && weight.isNotEmpty) {
-        request.fields['weight'] = weight;
-      }
-      if (birthday != null && birthday.isNotEmpty) {
-        request.fields['birthday'] = birthday;
-      }
-
-      // 添加生成配置
-      final cfg = config ?? const GenerationConfig();
-      request.fields['video_model'] = cfg.videoModel;
-      request.fields['video_mode'] = cfg.videoMode;
-      request.fields['video_duration'] = cfg.videoDuration.toString();
-      request.fields['image_removal_method'] = cfg.imageRemovalMethod;
-      request.fields['image_rembg_model'] = cfg.imageRembgModel;
-      request.fields['gif_removal_enabled'] = cfg.gifRemovalEnabled.toString();
-      request.fields['gif_removal_method'] = cfg.gifRemovalMethod;
-      request.fields['gif_rembg_model'] = cfg.gifRembgModel;
-
-      // 跨平台文件上传
-      if (imageFile.bytes != null) {
-        request.files.add(http.MultipartFile.fromBytes(
-          'file',
-          imageFile.bytes!,
-          filename: imageFile.name,
-        ));
-      } else if (imageFile.path != null && !kIsWeb) {
-        request.files.add(await http.MultipartFile.fromPath('file', imageFile.path!));
-      } else {
-        throw Exception('无效的文件数据');
-      }
-
-      print('📤 发送请求（阶段1：坐姿图生成）...');
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-
-      print('📥 收到响应: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = json.decode(responseBody);
-        print('✅ 坐姿图生成任务已创建: ${data['pet_id']}');
-        return data['pet_id'];
-      } else {
-        print('❌ 生成失败: $responseBody');
-        throw Exception('生成失败: $responseBody');
-      }
-    } catch (e) {
-      print('❌ 连接错误: $e');
-      rethrow;
-    }
-  }
-
-  /// 继续生成视频（阶段2）
-  /// 在用户确认坐姿图片后调用
-  Future<void> continueGeneration(String petId) async {
-    try {
-      final uri = Uri.parse('$baseUrl/api/kling/continue/$petId');
-      print('🚀 继续生成视频: $uri');
-
-      final response = await http.post(uri);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        print('✅ 继续生成任务已启动: ${data['pet_id']}');
-      } else {
-        print('❌ 继续生成失败: ${response.body}');
-        throw Exception('继续生成失败: ${response.body}');
-      }
-    } catch (e) {
-      print('❌ 继续生成错误: $e');
-      rethrow;
     }
   }
 
@@ -414,5 +267,119 @@ class KlingGenerationService {
   String getZipDownloadUrl(String petId, {String include = 'gifs'}) {
     return '$baseUrl/api/kling/download-zip/$petId?include=$include';
   }
-}
 
+  /// 获取可用的视频模型列表
+  Future<List<Map<String, dynamic>>> getAvailableModels() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/available-models');
+      print('🎬 获取可用模型: $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ 获取模型列表成功');
+        return List<Map<String, dynamic>>.from(data['models']);
+      } else {
+        print('❌ 获取失败: ${response.body}');
+        throw Exception('获取模型列表失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 获取错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 开始多模型生成任务
+  Future<Map<String, dynamic>> startMultiModelGeneration({
+    required CrossPlatformFile imageFile,
+    required String breed,
+    required String color,
+    required String species,
+    String? weight,
+    String? birthday,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/generate-multi-model');
+      print('🌐 开始多模型生成: $uri');
+
+      final request = http.MultipartRequest('POST', uri);
+      request.fields['breed'] = breed;
+      request.fields['color'] = color;
+      request.fields['species'] = species;
+      if (weight != null && weight.isNotEmpty) {
+        request.fields['weight'] = weight;
+      }
+      if (birthday != null && birthday.isNotEmpty) {
+        request.fields['birthday'] = birthday;
+      }
+
+      // 跨平台文件上传
+      if (imageFile.bytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          imageFile.bytes!,
+          filename: imageFile.name,
+        ));
+      } else if (imageFile.path != null && !kIsWeb) {
+        request.files.add(await http.MultipartFile.fromPath('file', imageFile.path!));
+      } else {
+        throw Exception('无效的文件数据');
+      }
+
+      print('📤 发送请求...');
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      print('📥 收到响应: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(responseBody);
+        print('✅ 多模型生成任务已创建: ${data['base_id']}');
+        return data;
+      } else {
+        print('❌ 生成失败: $responseBody');
+        throw Exception('生成失败: $responseBody');
+      }
+    } catch (e) {
+      print('❌ 连接错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 查询多模型生成状态
+  Future<Map<String, dynamic>> getMultiModelStatus(String baseId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/kling/multi-model-status/$baseId');
+      print('🔍 查询多模型状态: $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('📊 多模型状态: ${data['overall_status']} - ${data['completed_count']}/${data['total_count']}');
+        return data;
+      } else {
+        print('❌ 查询失败: ${response.body}');
+        throw Exception('查询状态失败: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ 查询错误: $e');
+      rethrow;
+    }
+  }
+
+  /// 轮询多模型状态（Stream）
+  Stream<Map<String, dynamic>> pollMultiModelStatus(String baseId) async* {
+    while (true) {
+      final status = await getMultiModelStatus(baseId);
+      yield status;
+
+      if (status['overall_status'] == 'completed' || status['overall_status'] == 'failed') {
+        break;
+      }
+
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+}
