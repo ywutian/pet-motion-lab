@@ -138,10 +138,9 @@ class _Step3GenerateInitialVideosScreenRefactoredState
   }
 
   Widget _buildResultSection() {
-    final resultsMap = _results as Map<String, dynamic>?;
-    final videos = resultsMap?['videos'] as Map<String, dynamic>? ?? {};
-    final firstFrames = resultsMap?['first_frames'] as Map<String, dynamic>? ?? {};
-    final lastFrames = resultsMap?['last_frames'] as Map<String, dynamic>? ?? {};
+    final videos = _results?['videos'] as Map<String, dynamic>? ?? {};
+    final firstFrames = _results?['first_frames'] as Map<String, dynamic>? ?? {};
+    final lastFrames = _results?['last_frames'] as Map<String, dynamic>? ?? {};
 
     // 转换为列表格式
     final videoList = videos.values.map((v) => v.toString()).toList();

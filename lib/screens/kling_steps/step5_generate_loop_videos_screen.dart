@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../services/kling_step_service.dart';
 import '../../utils/download_helper.dart';
 import 'step6_convert_to_gifs_screen.dart';
-import 'step6_convert_to_gifs_screen.dart';
 
 class Step5GenerateLoopVideosScreen extends StatefulWidget {
   final String petId;

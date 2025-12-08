@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../services/kling_step_service.dart';
 import '../../utils/download_helper.dart';
 import 'step4_generate_remaining_videos_screen.dart';
@@ -30,14 +28,7 @@ class _Step3GenerateInitialVideosScreenState extends State<Step3GenerateInitialV
   bool _isProcessing = false;
   String _statusMessage = '';
 
-  // 视频提取相关
-  File? _uploadedVideo;
-  bool _isExtracting = false;
-  String _extractMessage = '';
-  Map<String, dynamic>? _extractedFrames;
-
   final KlingStepService _service = KlingStepService();
-  final ImagePicker _picker = ImagePicker();
 
   Future<void> _executeStep() async {
     setState(() {
@@ -224,10 +215,9 @@ class _Step3GenerateInitialVideosScreenState extends State<Step3GenerateInitialV
   }
 
   Widget _buildResultSection() {
-    final resultsMap = _results as Map<String, dynamic>?;
-    final videos = resultsMap?['videos'] as Map<String, dynamic>? ?? {};
-    final firstFrames = resultsMap?['first_frames'] as Map<String, dynamic>? ?? {};
-    final lastFrames = resultsMap?['last_frames'] as Map<String, dynamic>? ?? {};
+    final videos = _results?['videos'] as Map<String, dynamic>? ?? {};
+    final firstFrames = _results?['first_frames'] as Map<String, dynamic>? ?? {};
+    final lastFrames = _results?['last_frames'] as Map<String, dynamic>? ?? {};
 
     return Card(
       color: Colors.green.shade50,

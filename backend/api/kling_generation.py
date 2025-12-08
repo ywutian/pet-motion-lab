@@ -1562,6 +1562,201 @@ async def get_available_models():
     })
 
 
+def run_multi_model_pipeline_sequential(
+    base_id: str,
+    upload_path: str,
+    breed: str,
+    color: str,
+    species: str,
+    weight: str,
+    birthday: str
+):
+    """
+    顺序执行多个模型的生成任务（优化版）
+
+    改进逻辑：
+    1. 先生成一次坐姿图（步骤1-3.5），所有模型共用
+    2. 然后每个模型只执行视频生成部分（步骤4-8）
+
+    这样可以：
+    - 节省图片生成的API费用（只调用一次）
+    - 保证对比的公平性（所有模型使用同一张坐姿图）
+    """
+    print("=" * 70)
+    print(f"🚀 开始多模型对比测试: {base_id}")
+    print(f"📋 共 {len(AVAILABLE_VIDEO_MODELS)} 个模型待测试")
+    print("=" * 70)
+
+    # ========== 阶段1: 生成坐姿图（只执行一次）==========
+    shared_pet_id = f"{base_id}_shared"
+
+    # 更新所有任务状态为"生成坐姿图中"
+    for model_config in AVAILABLE_VIDEO_MODELS:
+        model_name = model_config["model_name"]
+        pet_id = f"{base_id}_{model_name.replace('-', '_')}"
+        if pet_id in task_status:
+            task_status[pet_id]["status"] = "processing"
+            task_status[pet_id]["progress"] = 5
+            task_status[pet_id]["message"] = "🖼️ 正在生成共享坐姿图（步骤1-3.5）..."
+            task_status[pet_id]["current_step"] = "shared_image"
+
+    print("\n" + "=" * 50)
+    print("📸 阶段1: 生成共享坐姿图")
+    print("=" * 50)
+
+    try:
+        # 创建一个临时Pipeline用于生成坐姿图
+        image_pipeline = KlingPipeline(
+            access_key=ACCESS_KEY,
+            secret_key=SECRET_KEY,
+            output_dir="output/kling_pipeline",
+            max_retries=BACKGROUND_MAX_RETRIES,
+            retry_delay=BACKGROUND_RETRY_DELAY,
+            step_interval=BACKGROUND_STEP_INTERVAL,
+            api_interval=BACKGROUND_API_INTERVAL
+        )
+
+        # 解析weight为浮点数
+        weight_float = 0.0
+        if weight:
+            try:
+                weight_float = float(weight.replace("kg", "").replace("公斤", "").strip())
+            except ValueError:
+                weight_float = 0.0
+
+        # 执行图片生成（步骤1-3.5）
+        image_results = image_pipeline.run_image_generation_only(
+            uploaded_image=upload_path,
+            breed=breed,
+            color=color,
+            species=species,
+            pet_id=shared_pet_id,
+            weight=weight_float,
+            birthday=birthday
+        )
+
+        # 获取坐姿图路径
+        sit_image_path = image_results["steps"]["base_sit"]
+        print(f"\n✅ 共享坐姿图生成完成: {sit_image_path}")
+
+    except Exception as e:
+        print(f"❌ 坐姿图生成失败: {e}")
+        traceback.print_exc()
+
+        # 更新所有任务状态为失败
+        for model_config in AVAILABLE_VIDEO_MODELS:
+            model_name = model_config["model_name"]
+            pet_id = f"{base_id}_{model_name.replace('-', '_')}"
+            if pet_id in task_status:
+                task_status[pet_id]["status"] = "failed"
+                task_status[pet_id]["message"] = f"❌ 坐姿图生成失败: {str(e)}"
+                db.update_task(pet_id, status='failed', message=f"坐姿图生成失败: {str(e)}")
+        return
+
+    # ========== 阶段2: 每个模型执行视频生成 ==========
+    print("\n" + "=" * 50)
+    print("🎬 阶段2: 多模型视频生成")
+    print("=" * 50)
+
+    for idx, model_config in enumerate(AVAILABLE_VIDEO_MODELS):
+        model_name = model_config["model_name"]
+        mode = model_config["mode"]
+        pet_id = f"{base_id}_{model_name.replace('-', '_')}"
+
+        print(f"\n🔄 开始执行模型 {idx + 1}/{len(AVAILABLE_VIDEO_MODELS)}: {model_name}")
+
+        # 更新状态为正在处理
+        if pet_id in task_status:
+            task_status[pet_id]["status"] = "processing"
+            task_status[pet_id]["progress"] = 30
+            task_status[pet_id]["message"] = f"🎬 正在生成视频 (模型 {idx + 1}/{len(AVAILABLE_VIDEO_MODELS)})"
+            task_status[pet_id]["current_step"] = "video_generation"
+            db.update_task(pet_id, status='processing', started_at=time.time())
+
+        # 执行视频生成（步骤4-8）
+        try:
+            # 状态回调
+            def status_callback(progress, message, step):
+                if pet_id in task_status:
+                    # 进度从30开始（前面30%是坐姿图生成）
+                    adjusted_progress = 30 + int(progress * 0.7)
+                    task_status[pet_id]["progress"] = adjusted_progress
+                    task_status[pet_id]["message"] = message
+                    task_status[pet_id]["current_step"] = step
+
+            # 创建视频生成Pipeline
+            video_pipeline = KlingPipeline(
+                access_key=ACCESS_KEY,
+                secret_key=SECRET_KEY,
+                output_dir="output/kling_pipeline",
+                max_retries=BACKGROUND_MAX_RETRIES,
+                retry_delay=BACKGROUND_RETRY_DELAY,
+                step_interval=BACKGROUND_STEP_INTERVAL,
+                api_interval=BACKGROUND_API_INTERVAL,
+                status_callback=status_callback,
+                video_model_name=model_name,
+                video_model_mode=mode
+            )
+
+            # 执行视频生成
+            results = video_pipeline.run_video_only_pipeline(
+                sit_image=sit_image_path,
+                breed=breed,
+                color=color,
+                species=species,
+                pet_id=pet_id
+            )
+
+            # 更新任务状态为完成
+            task_status[pet_id]["status"] = "completed"
+            task_status[pet_id]["progress"] = 100
+            task_status[pet_id]["message"] = "✅ 生成完成！"
+            task_status[pet_id]["results"] = results
+
+            # 保存元数据
+            _save_metadata(pet_id, {
+                "breed": breed,
+                "color": color,
+                "species": species,
+                "weight": weight,
+                "birthday": birthday,
+                "video_model_name": model_name,
+                "video_model_mode": mode,
+                "shared_sit_image": sit_image_path,
+                "created_at": task_status[pet_id].get("started_at", time.time()),
+                "completed_at": time.time(),
+                "status": "completed",
+            })
+
+            # 同步到数据库
+            db.update_task(pet_id, status='completed', progress=100,
+                           message='✅ 生成完成！', results=results,
+                           completed_at=time.time())
+
+            print(f"✅ 模型 {model_name} 完成")
+
+        except Exception as e:
+            print(f"❌ 模型 {model_name} 执行失败: {e}")
+            traceback.print_exc()
+
+            if pet_id in task_status:
+                task_status[pet_id]["status"] = "failed"
+                task_status[pet_id]["message"] = f"❌ 失败: {str(e)}"
+                db.update_task(pet_id, status='failed', message=str(e))
+            # 失败了也继续执行下一个
+
+        # 等待一下再执行下一个（避免 API 限流）
+        if idx < len(AVAILABLE_VIDEO_MODELS) - 1:
+            print(f"⏳ 等待 5 秒后执行下一个模型...")
+            time.sleep(5)
+
+    print("\n" + "=" * 70)
+    print(f"✅ 多模型对比测试完成: {base_id}")
+    print(f"📷 共享坐姿图: {sit_image_path}")
+    print(f"🎬 已测试 {len(AVAILABLE_VIDEO_MODELS)} 个视频模型")
+    print("=" * 70)
+
+
 @router.post("/generate-multi-model")
 async def generate_multi_model(
     file: UploadFile = File(...),
@@ -1572,9 +1767,9 @@ async def generate_multi_model(
     birthday: str = Form("")
 ):
     """
-    使用多个模型同时生成宠物动画（用于模型对比测试）
+    使用多个模型顺序生成宠物动画（用于模型对比测试）
 
-    会同时启动4个任务，每个任务使用不同的视频模型
+    会依次执行4个任务，每个任务使用不同的视频模型，一个完成后再执行下一个
 
     Args:
         file: 上传的宠物图片
@@ -1597,16 +1792,20 @@ async def generate_multi_model(
 
     tasks = []
 
+    # 先初始化所有任务状态（标记为等待中）
     for idx, model_config in enumerate(AVAILABLE_VIDEO_MODELS):
         model_name = model_config["model_name"]
         mode = model_config["mode"]
         pet_id = f"{base_id}_{model_name.replace('-', '_')}"
 
         # 初始化任务状态
+        initial_status = "processing" if idx == 0 else "pending"
+        initial_message = f"🚀 正在生成 (模型 1/{len(AVAILABLE_VIDEO_MODELS)})" if idx == 0 else f"⏳ 等待中 (排队 #{idx + 1})"
+
         task_status[pet_id] = {
-            "status": "processing",
+            "status": initial_status,
             "progress": 0,
-            "message": f"🚀 任务已创建，使用模型: {model_name}",
+            "message": initial_message,
             "current_step": "init",
             "breed": breed,
             "color": color,
@@ -1617,38 +1816,38 @@ async def generate_multi_model(
             "video_model_mode": mode,
             "results": None,
             "error": None,
-            "started_at": time.time()
+            "started_at": time.time() if idx == 0 else None,
+            "queue_position": idx + 1
         }
 
         # 持久化到数据库
         db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
                        weight=weight, birthday=birthday)
-        db.update_task(pet_id, status='processing', started_at=time.time())
-
-        # 启动后台线程
-        thread = threading.Thread(
-            target=run_pipeline_in_background,
-            args=(pet_id, str(upload_path), breed, color, species, weight, birthday,
-                  model_name, mode),
-            daemon=True
-        )
-        thread.start()
 
         tasks.append({
             "pet_id": pet_id,
             "model_name": model_name,
             "mode": mode,
             "price_5s": model_config["price_5s"],
-            "description": model_config["description"]
+            "description": model_config["description"],
+            "queue_position": idx + 1
         })
 
-        print(f"📤 多模型任务已启动: {pet_id} (模型: {model_name})")
+        print(f"📋 多模型任务已创建: {pet_id} (模型: {model_name}, 队列位置: {idx + 1})")
+
+    # 启动一个后台线程顺序执行所有模型
+    thread = threading.Thread(
+        target=run_multi_model_pipeline_sequential,
+        args=(base_id, str(upload_path), breed, color, species, weight, birthday),
+        daemon=True
+    )
+    thread.start()
 
     return JSONResponse({
         "base_id": base_id,
         "tasks": tasks,
-        "message": f"🚀 已启动 {len(tasks)} 个模型的生成任务",
-        "note": "请使用 GET /api/kling/multi-model-status/{base_id} 查询所有任务进度"
+        "message": f"🚀 已创建 {len(tasks)} 个模型的生成任务（顺序执行）",
+        "note": "模型将按顺序执行，一个完成后再执行下一个。请使用 GET /api/kling/multi-model-status/{base_id} 查询进度"
     })
 
 

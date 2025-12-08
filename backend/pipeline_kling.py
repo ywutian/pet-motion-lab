@@ -485,6 +485,239 @@ class KlingPipeline:
 
         return results
 
+    def run_image_generation_only(
+        self,
+        uploaded_image: str,
+        breed: str,
+        color: str,
+        species: str,
+        pet_id: str,
+        remove_background_flag: bool = True,
+        weight: float = 0.0,
+        gender: str = "",
+        birthday: str = ""
+    ) -> Dict:
+        """
+        只执行图片生成部分（步骤1-3.5）
+        用于多模型对比测试时，先生成一张坐姿图供所有视频模型共用
+
+        Args:
+            uploaded_image: 用户上传的图片路径
+            breed: 品种
+            color: 颜色
+            species: 物种
+            pet_id: 宠物ID
+            remove_background_flag: 是否去除背景
+            weight: 重量（用于v3.0智能分析）
+            gender: 性别
+            birthday: 生日
+
+        Returns:
+            包含坐姿图路径的字典
+        """
+        import shutil
+
+        self.breed = breed
+        self.color = color
+        self.species = species
+        self.weight = weight
+        self.gender = gender
+        self.birthday = birthday
+
+        # 如果使用v3.0系统，进行智能分析
+        if self.use_v3_prompts and weight > 0 and birthday:
+            from prompt_config.intelligent_analyzer import analyze_pet_info
+            analysis = analyze_pet_info(breed, weight, birthday)
+            self.body_type = analysis["body_type"]
+            self.age_stage = analysis["age_stage"]
+            print(f"🧠 v3.0智能分析: 年龄{analysis['age_years']}岁 ({analysis['age_stage']})，体型: {self.body_type}")
+
+        self.setup_pet_directories(pet_id)
+
+        print("=" * 70)
+        print(f"🖼️  开始图片生成流程（步骤1-3.5）: {breed}{color}{species}")
+        print(f"📁 输出目录: {self.pet_dir}")
+        print("=" * 70)
+
+        results = {
+            "pet_id": pet_id,
+            "breed": breed,
+            "color": color,
+            "species": species,
+            "steps": {}
+        }
+
+        # ==================== 步骤1: 保存原图 ====================
+        self._update_status(5, "步骤1: 保存原图...", "step1")
+        print("\n📤 步骤1: 保存原图")
+        original_path = self.pet_dir / "original.jpg"
+        shutil.copy(uploaded_image, original_path)
+        results["steps"]["original"] = str(original_path)
+        print(f"✅ 原图已保存: {original_path}")
+
+        self._wait_interval(self.step_interval, "步骤1完成")
+
+        # ==================== 步骤2: 去背景（生成前）====================
+        self._update_status(10, "步骤2: 去除背景（第1次）...", "step2")
+        print("\n🎨 步骤2: 去除背景（生成sit前）")
+        transparent_path = self.pet_dir / "transparent.png"
+
+        if remove_background_flag:
+            remove_background(str(original_path), str(transparent_path))
+            print(f"✅ 背景已去除: {transparent_path}")
+        else:
+            print(f"⚠️  跳过背景去除，直接使用原图")
+            shutil.copy(str(original_path), transparent_path)
+            print(f"✅ 已复制原图到: {transparent_path}")
+
+        results["steps"]["transparent"] = str(transparent_path)
+
+        self._wait_interval(self.step_interval, "步骤2完成")
+
+        # ==================== 步骤3: 生成第一张基准图（sit）====================
+        self._update_status(20, "步骤3: 生成基础坐姿图片（可灵API）...", "step3")
+        print("\n🖼️  步骤3: 生成第一张基准图（sit）- 调用可灵API")
+        sit_image_raw = self._generate_base_image("sit", str(transparent_path))
+        results["steps"]["base_sit_raw"] = sit_image_raw
+
+        self._wait_interval(self.step_interval, "步骤3完成")
+
+        # ==================== 步骤3.5: 去背景（生成后）====================
+        self._update_status(25, "步骤3.5: 去除生成图片背景（第2次）...", "step3.5")
+        print("\n🎨 步骤3.5: 去除sit图片的背景")
+        sit_image_clean = str(self.images_dir / "sit_clean.png")
+
+        if remove_background_flag:
+            remove_background(sit_image_raw, sit_image_clean)
+            print(f"✅ sit图片背景已去除: {sit_image_clean}")
+            shutil.copy(sit_image_clean, sit_image_raw)
+            print(f"✅ 已更新sit.png为去背景版本")
+        else:
+            print(f"⚠️  跳过sit图片背景去除")
+
+        sit_image = sit_image_raw
+        results["steps"]["base_sit"] = sit_image
+
+        self._update_status(30, "✅ 图片生成完成！", "image_done")
+        print("\n" + "=" * 70)
+        print("✅ 图片生成流程完成！")
+        print(f"📷 坐姿图: {sit_image}")
+        print("=" * 70)
+
+        return results
+
+    def run_video_only_pipeline(
+        self,
+        sit_image: str,
+        breed: str,
+        color: str,
+        species: str,
+        pet_id: str,
+        shared_base_images_dir: str = None
+    ) -> Dict:
+        """
+        只执行视频生成部分（步骤4-8）
+        用于多模型对比测试时，使用共享的坐姿图生成视频
+
+        Args:
+            sit_image: 坐姿图路径（已生成好的）
+            breed: 品种
+            color: 颜色
+            species: 物种
+            pet_id: 宠物ID（每个模型独立的ID）
+            shared_base_images_dir: 共享的base_images目录（可选，用于复制坐姿图）
+
+        Returns:
+            包含所有视频结果的字典
+        """
+        import shutil
+
+        self.breed = breed
+        self.color = color
+        self.species = species
+
+        self.setup_pet_directories(pet_id)
+
+        print("=" * 70)
+        print(f"🎬 开始视频生成流程（步骤4-8）: {breed}{color}{species}")
+        print(f"📁 输出目录: {self.pet_dir}")
+        print(f"🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
+        print(f"📷 使用坐姿图: {sit_image}")
+        print("=" * 70)
+
+        results = {
+            "pet_id": pet_id,
+            "breed": breed,
+            "color": color,
+            "species": species,
+            "video_model": self.video_model_name,
+            "video_mode": self.video_model_mode,
+            "steps": {}
+        }
+
+        # 复制坐姿图到当前模型的目录
+        local_sit_image = str(self.images_dir / "sit.png")
+        shutil.copy(sit_image, local_sit_image)
+        results["steps"]["base_sit"] = local_sit_image
+        print(f"📷 已复制坐姿图到: {local_sit_image}")
+
+        # ==================== 步骤4: 生成前3个过渡视频 + 提取首尾帧 ====================
+        self._update_status(35, "步骤4: 生成初始过渡视频 + 提取首尾帧...", "step4")
+        print("\n🎬 步骤4: 生成前3个过渡视频 + 提取首尾帧")
+        print("  📌 视频: sit→walk, sit→rest, rest→sleep")
+        print("  📌 提取尾帧作为其他姿势基础图: walk.png, rest.png, sleep.png")
+        first_videos, other_poses, first_frames, last_frames = self._generate_first_transitions(local_sit_image)
+        results["steps"]["first_transitions"] = first_videos
+        results["steps"]["other_base_images"] = other_poses
+        results["steps"]["first_frames"] = first_frames
+        results["steps"]["last_frames"] = last_frames
+
+        self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
+        self._wait_interval(self.step_interval, "步骤4完成")
+
+        # ==================== 步骤5: 生成剩余过渡视频 ====================
+        self._update_status(55, "步骤5: 生成剩余过渡视频...", "step5")
+        print("\n🎬 步骤5: 生成剩余过渡视频")
+        remaining_videos = self._generate_remaining_transitions()
+        results["steps"]["remaining_transitions"] = remaining_videos
+
+        self._wait_interval(self.step_interval, "步骤5完成")
+
+        # ==================== 步骤6: 生成循环视频 ====================
+        self._update_status(75, "步骤6: 生成循环视频...", "step6")
+        print("\n🔄 步骤6: 生成循环视频")
+        loop_videos = self._generate_loop_videos()
+        results["steps"]["loop_videos"] = loop_videos
+
+        self._wait_interval(self.step_interval, "步骤6完成")
+
+        # ==================== 步骤7: 转换为GIF ====================
+        self._update_status(90, "步骤7: 转换视频为GIF...", "step7")
+        print("\n🎞️  步骤7: 转换所有视频为GIF")
+        gifs = self._convert_all_to_gif()
+        results["steps"]["gifs"] = gifs
+
+        self._wait_interval(self.step_interval, "步骤7完成")
+
+        # ==================== 步骤8: 拼接所有过渡视频 ====================
+        self._update_status(95, "步骤8: 拼接过渡视频...", "step8")
+        print("\n🎬 步骤8: 拼接所有过渡视频为长视频")
+        concatenated_video = self._concatenate_transition_videos()
+        results["steps"]["concatenated_video"] = concatenated_video
+
+        # 保存元数据
+        metadata_path = self.pet_dir / "metadata.json"
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+
+        self._update_status(100, "✅ 视频生成完成！", "completed")
+        print("\n" + "=" * 70)
+        print("✅ 视频生成流程完成！")
+        print(f"📊 元数据已保存: {metadata_path}")
+        print("=" * 70)
+
+        return results
+
     def _generate_base_image(self, pose: str, transparent_image: str) -> str:
         """生成基准图（图生图），带重试机制"""
         # 如果使用v3.0 prompt系统

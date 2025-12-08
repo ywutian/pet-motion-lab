@@ -18,8 +18,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           SliverList(
             delegate: SliverChildListDelegate([
-              _buildAPIKeysSection(context),
-              _buildDefaultModelsSection(context),
+              _buildVideoModelsSection(context),
               _buildGenerationSettingsSection(context),
               _buildSpeciesLibrarySection(context),
               const SizedBox(height: 32),
@@ -30,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAPIKeysSection(BuildContext context) {
+  Widget _buildVideoModelsSection(BuildContext context) {
     final theme = Theme.of(context);
     final settings = context.watch<SettingsProvider>();
 
@@ -43,94 +42,42 @@ class SettingsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '🔑 可灵AI配置',
+                '🎬 视频模型配置',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Access Key',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.key),
-                  helperText: '可灵AI访问密钥',
-                ),
-                obscureText: true,
-                controller: TextEditingController(text: settings.klingAccessKey),
-                onChanged: (value) => settings.setKlingAccessKey(value),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Secret Key',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                  helperText: '可灵AI密钥',
-                ),
-                obscureText: true,
-                controller: TextEditingController(text: settings.klingSecretKey),
-                onChanged: (value) => settings.setKlingSecretKey(value),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDefaultModelsSection(BuildContext context) {
-    final theme = Theme.of(context);
-    final settings = context.watch<SettingsProvider>();
-
-    return Padding(
-      padding: _sectionPadding(context, top: 0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+              const SizedBox(height: 8),
               Text(
-                '🤖 默认模型配置',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
+                '选择默认的视频生成模型，不同模型在质量和价格上有所差异',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: settings.defaultStaticModel,
-                decoration: const InputDecoration(
-                  labelText: '默认静态模型',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.image),
-                  helperText: '图生图模型',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'kling-image',
-                    child: Text('可灵AI 图生图'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    settings.setDefaultStaticModel(value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: settings.defaultVideoModel,
+                value: settings.defaultVideoModel,
                 decoration: const InputDecoration(
                   labelText: '默认视频模型',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.video_library),
-                  helperText: '图生视频模型',
                 ),
                 items: const [
                   DropdownMenuItem(
-                    value: 'kling-video',
-                    child: Text('可灵AI 图生视频'),
+                    value: 'kling-v2-5-turbo',
+                    child: Text('V2.5 Turbo · \$0.35/5s · 性价比最高 ⭐'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kling-v2-1',
+                    child: Text('V2.1 Pro · \$0.49/5s · 画质最佳'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kling-v1-6',
+                    child: Text('V1.6 Pro · \$0.28/5s · 稳定版本'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'kling-v1-5',
+                    child: Text('V1.5 Pro · \$0.21/5s · 经济实惠'),
                   ),
                 ],
                 onChanged: (value) {
@@ -139,9 +86,59 @@ class SettingsScreen extends StatelessWidget {
                   }
                 },
               ),
+              const SizedBox(height: 16),
+              // 模型对比说明卡片
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📊 模型对比',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildModelCompareRow(theme, 'V2.5 Turbo', '\$0.35', '⭐⭐⭐⭐', '支持首尾帧，性价比最高'),
+                    _buildModelCompareRow(theme, 'V2.1 Pro', '\$0.49', '⭐⭐⭐⭐⭐', '支持首尾帧，画质最佳'),
+                    _buildModelCompareRow(theme, 'V1.6 Pro', '\$0.28', '⭐⭐⭐', '稳定版本，适合常规使用'),
+                    _buildModelCompareRow(theme, 'V1.5 Pro', '\$0.21', '⭐⭐', '最便宜，质量较低'),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildModelCompareRow(ThemeData theme, String name, String price, String quality, String note) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(name, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+          ),
+          SizedBox(
+            width: 50,
+            child: Text(price, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+          ),
+          SizedBox(
+            width: 70,
+            child: Text(quality, style: theme.textTheme.bodySmall),
+          ),
+          Expanded(
+            child: Text(note, style: theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7))),
+          ),
+        ],
       ),
     );
   }

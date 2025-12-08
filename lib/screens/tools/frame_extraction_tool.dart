@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/video_trimming_service.dart';
@@ -20,7 +19,6 @@ class FrameExtractionTool extends StatefulWidget {
 
 class _FrameExtractionToolState extends State<FrameExtractionTool> {
   final ImagePicker _picker = ImagePicker();
-  final VideoTrimmingService _service = VideoTrimmingService();
   final ToolHistoryService _historyService = ToolHistoryService();
 
   File? _selectedVideo;

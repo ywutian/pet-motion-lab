@@ -1,7 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';

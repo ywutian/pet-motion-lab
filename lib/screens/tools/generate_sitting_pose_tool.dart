@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/kling_tools_service.dart';
 import '../../services/tool_history_service.dart';

@@ -194,6 +194,24 @@ class KlingGenerationService {
     }
   }
 
+  /// 获取正在进行的任务列表
+  /// 返回所有状态为 processing 的任务
+  Future<List<Map<String, dynamic>>> getPendingTasks() async {
+    try {
+      final data = await getHistory(
+        page: 1,
+        pageSize: 50,
+        statusFilter: 'processing',
+      );
+
+      final items = data['items'] as List<dynamic>? ?? [];
+      return items.cast<Map<String, dynamic>>();
+    } catch (e) {
+      print('❌ 获取正在进行的任务失败: $e');
+      return [];
+    }
+  }
+
   /// 获取历史记录详情
   Future<Map<String, dynamic>> getHistoryDetail(String petId) async {
     try {

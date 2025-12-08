@@ -7,9 +7,7 @@ import '../services/kling_generation_service.dart';
 import '../providers/settings_provider.dart';
 import '../models/cross_platform_file.dart';
 import '../utils/file_picker_helper.dart';
-import '../utils/web_download_helper.dart';
 import 'kling_result_screen.dart';
-import 'kling_step_by_step_screen.dart';
 import 'step_selector_screen.dart';
 
 class KlingGenerationScreen extends StatefulWidget {

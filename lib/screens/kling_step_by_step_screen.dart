@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:animate_do/animate_do.dart';
 import '../services/kling_step_service.dart';
 import '../providers/settings_provider.dart';
 

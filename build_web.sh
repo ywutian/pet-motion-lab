@@ -5,7 +5,7 @@ echo "🚀 开始构建 Flutter Web..."
 echo "================================"
 
 # 设置 API 地址（从环境变量读取，或使用默认值）
-API_URL="${API_BASE_URL:-https://pet-motion-lab-api.onrender.com}"
+API_URL="${API_BASE_URL:-https://pet-motion-lab-api-production.up.railway.app}"
 
 echo "📝 配置信息:"
 echo "  API URL: $API_URL"
@@ -32,5 +32,5 @@ echo "📁 输出目录: build/web"
 echo ""
 echo "💡 提示："
 echo "  - 可以使用 'python -m http.server -d build/web 8080' 本地测试"
-echo "  - 部署到 Render 时会自动使用这个构建"
+echo "  - 部署到 Netlify 时会自动使用这个构建"
 
