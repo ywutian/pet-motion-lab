@@ -48,6 +48,11 @@ class GenerationStatus(BaseModel):
 # 内存中的任务状态缓存（用于实时进度更新，同时持久化到数据库）
 task_status = {}
 
+# 防止重复提交的锁和记录
+_submit_lock = threading.Lock()
+_recent_submissions = {}  # {hash: timestamp} 用于防止短时间内重复提交
+DUPLICATE_THRESHOLD_SECONDS = 30  # 30秒内相同请求视为重复
+
 # 输出目录
 OUTPUT_DIR = Path("output/kling_pipeline")
 
@@ -572,7 +577,8 @@ async def step2_generate_base_image(
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            use_v3_prompts=True  # 启用v3.0智能提示词系统
         )
 
         # 执行步骤2
@@ -664,6 +670,7 @@ def run_pipeline_in_background(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
             output_dir="output/kling_pipeline",
+            use_v3_prompts=True,  # 启用v3.0智能提示词系统
             max_retries=BACKGROUND_MAX_RETRIES,
             retry_delay=BACKGROUND_RETRY_DELAY,
             step_interval=BACKGROUND_STEP_INTERVAL,
@@ -768,6 +775,33 @@ async def generate_pet_animations(
     Returns:
         任务ID和初始状态（任务在后台执行）
     """
+    import hashlib
+
+    # 防止重复提交检查
+    # 使用文件名+品种+颜色生成请求指纹
+    request_hash = hashlib.md5(f"{file.filename}_{breed}_{color}_{species}".encode()).hexdigest()
+    current_time = time.time()
+
+    with _submit_lock:
+        # 清理过期的记录
+        expired_keys = [k for k, v in _recent_submissions.items()
+                        if current_time - v > DUPLICATE_THRESHOLD_SECONDS]
+        for k in expired_keys:
+            del _recent_submissions[k]
+
+        # 检查是否是重复请求
+        if request_hash in _recent_submissions:
+            last_submit_time = _recent_submissions[request_hash]
+            time_diff = current_time - last_submit_time
+            print(f"⚠️ 检测到重复提交请求，距离上次提交 {time_diff:.1f} 秒")
+            raise HTTPException(
+                status_code=429,
+                detail=f"请勿重复提交！请等待 {int(DUPLICATE_THRESHOLD_SECONDS - time_diff)} 秒后重试。"
+            )
+
+        # 记录本次提交
+        _recent_submissions[request_hash] = current_time
+
     # 生成任务ID
     pet_id = f"pet_{int(time.time())}"
 
@@ -858,7 +892,8 @@ async def step3_generate_initial_videos(
             pipeline = KlingPipeline(
                 access_key=ACCESS_KEY,
                 secret_key=SECRET_KEY,
-                output_dir="output/kling_pipeline"
+                output_dir="output/kling_pipeline",
+                use_v3_prompts=True  # 启用v3.0智能提示词系统
             )
 
             # 执行步骤3
@@ -944,7 +979,8 @@ async def step4_generate_remaining_videos(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            use_v3_prompts=True  # 启用v3.0智能提示词系统
         )
 
         # 执行步骤4
@@ -994,7 +1030,8 @@ async def step5_generate_loop_videos(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            use_v3_prompts=True  # 启用v3.0智能提示词系统
         )
 
         # 执行步骤5
@@ -1044,7 +1081,8 @@ async def step6_convert_to_gifs(pet_id: str):
         pipeline = KlingPipeline(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
-            output_dir="output/kling_pipeline"
+            output_dir="output/kling_pipeline",
+            use_v3_prompts=True  # 启用v3.0智能提示词系统
         )
 
         # 收集所有视频
@@ -1610,6 +1648,7 @@ def run_multi_model_pipeline_sequential(
             access_key=ACCESS_KEY,
             secret_key=SECRET_KEY,
             output_dir="output/kling_pipeline",
+            use_v3_prompts=True,  # 启用v3.0智能提示词系统
             max_retries=BACKGROUND_MAX_RETRIES,
             retry_delay=BACKGROUND_RETRY_DELAY,
             step_interval=BACKGROUND_STEP_INTERVAL,
@@ -1689,6 +1728,7 @@ def run_multi_model_pipeline_sequential(
                 access_key=ACCESS_KEY,
                 secret_key=SECRET_KEY,
                 output_dir="output/kling_pipeline",
+                use_v3_prompts=True,  # 启用v3.0智能提示词系统
                 max_retries=BACKGROUND_MAX_RETRIES,
                 retry_delay=BACKGROUND_RETRY_DELAY,
                 step_interval=BACKGROUND_STEP_INTERVAL,
@@ -1782,6 +1822,32 @@ async def generate_multi_model(
     Returns:
         包含4个任务ID的列表
     """
+    import hashlib
+
+    # 防止重复提交检查
+    request_hash = hashlib.md5(f"multi_{file.filename}_{breed}_{color}_{species}".encode()).hexdigest()
+    current_time = time.time()
+
+    with _submit_lock:
+        # 清理过期的记录
+        expired_keys = [k for k, v in _recent_submissions.items()
+                        if current_time - v > DUPLICATE_THRESHOLD_SECONDS]
+        for k in expired_keys:
+            del _recent_submissions[k]
+
+        # 检查是否是重复请求
+        if request_hash in _recent_submissions:
+            last_submit_time = _recent_submissions[request_hash]
+            time_diff = current_time - last_submit_time
+            print(f"⚠️ 检测到重复提交请求（多模型），距离上次提交 {time_diff:.1f} 秒")
+            raise HTTPException(
+                status_code=429,
+                detail=f"请勿重复提交！请等待 {int(DUPLICATE_THRESHOLD_SECONDS - time_diff)} 秒后重试。"
+            )
+
+        # 记录本次提交
+        _recent_submissions[request_hash] = current_time
+
     # 生成基础任务ID
     base_id = f"multi_{int(time.time())}"
 
