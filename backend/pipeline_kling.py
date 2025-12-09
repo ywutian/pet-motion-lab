@@ -11,6 +11,7 @@ import time
 import random
 import traceback
 from pathlib import Path
+from datetime import datetime
 from typing import Dict, List, Optional, Callable, Any
 from kling_api_helper import KlingAPI
 import config
@@ -1052,23 +1053,26 @@ class KlingPipeline:
     def _concatenate_transition_videos(self) -> str:
         """拼接所有过渡视频为一个长视频"""
         transitions_dir = self.videos_dir / "transitions"
-        
+
         if not transitions_dir.exists():
             print("  ⚠️  过渡视频目录不存在，跳过拼接")
             return None
-        
+
         # 获取所有过渡视频
         video_files = sorted(transitions_dir.glob("*.mp4"))
-        
+
         if not video_files:
             print("  ⚠️  没有找到过渡视频，跳过拼接")
             return None
-        
+
         # 智能排序：尝试形成连贯的动作序列
         ordered_videos = self._sort_videos_by_transition(video_files)
-        
-        # 输出路径
-        output_path = str(self.videos_dir / "all_transitions_concatenated.mp4")
+
+        # 生成动态文件名：{species}_{breed}_{model_name}_{timestamp}.mp4
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name_safe = self.video_model_name.replace('-', '_')
+        filename = f"{self.species}_{self.breed}_{model_name_safe}_{timestamp}.mp4"
+        output_path = str(self.videos_dir / filename)
         
         print(f"  📹 准备拼接 {len(ordered_videos)} 个过渡视频...")
         print(f"  拼接顺序:")

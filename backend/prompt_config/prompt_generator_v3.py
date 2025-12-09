@@ -90,10 +90,10 @@ def _generate_line1(breed_name: str, body_type: str, color: str, breed_config: d
     """生成第1行：保持原图特征"""
     fur_feature = breed_config["fur_feature"]
     ear_shape = breed_config["ear_shape"]
-    
+
     # 基础特征
     features = [color, fur_feature, ear_shape]
-    
+
     # 添加特殊标记（如果有）
     if "special_markers" in breed_config:
         # 橘猫特殊处理
@@ -111,22 +111,22 @@ def _generate_line1(breed_name: str, body_type: str, color: str, breed_config: d
                 features[0] = f"{color}虎斑"
         elif special:
             features.insert(0, special) if "重点色" in special else features.append(special)
-    
+
     features_str = "、".join(features)
-    
+
     # 构建第1行
     if precise_pattern and breed_name == "橘猫":
         line1 = f"保持原图{breed_name}的{body_type}和完整外观：{features_str}。"
     else:
         line1 = f"保持原图{breed_name}的{body_type}和外观特征：{features_str}。"
-    
+
     return line1
 
 
 def _generate_line2(breed_config: dict, species_type: str) -> str:
     """生成第2行：风格描述"""
     fur_style = breed_config["fur_style"]
-    
+
     if species_type == "狗":
         # 狗 - 卡通风格
         exclude = breed_config["exclude"]
@@ -137,7 +137,7 @@ def _generate_line2(breed_config: dict, species_type: str) -> str:
     else:
         # 猫 - 根据style_type选择
         style_type = breed_config.get("style_type", "realistic")
-        
+
         if style_type == "disney_realistic":
             # 迪士尼写实风格
             line2 = (
@@ -147,95 +147,8 @@ def _generate_line2(breed_config: dict, species_type: str) -> str:
         else:
             # 纯写实风格
             line2 = f"写实渲染，{fur_style}，自然光影细腻层次。"
-    
+
     return line2
-
-
-def generate_transition_prompt_v3(
-    transition: str,
-    breed_name: str,
-    body_type: str,
-    color: str,
-    use_detailed: bool = True  # 是否使用详细描述
-) -> str:
-    """
-    生成过渡视频的prompt (v3.0)
-    
-    Args:
-        transition: 过渡名称 (如 "sit2walk")
-        breed_name: 品种名
-        body_type: 体型
-        color: 颜色
-    
-    Returns:
-        过渡视频prompt
-    """
-    breed_config = get_breed_config(breed_name)
-    if not breed_config:
-        return f"错误: 未找到品种配置 {breed_name}"
-
-    species_type = breed_config["species_type"]
-    species_name = "犬" if species_type == "狗" else "猫"
-
-    # 获取品种特征（用于保持一致性）
-    fur_feature = breed_config.get("fur_feature", "")
-    ear_shape = breed_config.get("ear_shape", "")
-
-    # 构建品种特征描述
-    breed_features = f"保持{breed_name}的{ear_shape}和{fur_feature}特征，"
-
-    # 过渡动作描述（v3.2详细版 - 消除所有歧义，保持品种特性）
-    if use_detailed:
-        # 超详细版 - 明确每个细节
-        transition_actions = {
-            "sit2walk": "从坐姿四脚同时着地站起身（不能只用前脚或后脚），然后自然行走，前后脚交替移动，每次只有一只或两只对角脚离地，不能四脚同时离地或跳跃",
-            "sit2rest": "从坐姿身体向前倾，前腿向前伸展后腿向后伸展，肚子胸部贴地呈趴卧姿势，头抬起眼睛睁开",
-            "sit2sleep": "从坐姿身体向前或侧面倾倒，四肢放松伸展肚子贴地，头放下贴近地面或前爪，闭眼，嘴微张有节奏打呼噜，鼻子有气体呼入呼出",
-            "rest2sleep": "保持趴卧姿势肚子胸部贴地，头慢慢放下，眼睛缓缓闭上，身体完全放松，嘴微张有节奏打呼噜，鼻子有明显气体呼入呼出",
-            "rest2sit": "从趴卧姿势前腿后腿同时用力，保持四脚着地身体向上撑起（不能只用前脚撑起上半身），然后后腿弯曲臀部下沉，前腿直立后腿弯曲呈坐姿",
-            "rest2walk": "从趴卧姿势前腿后腿同时用力四脚着地站起身（不能只用前脚），站起后开始行走，前后脚交替移动，每次只有一只或两只对角脚离地",
-            "walk2sit": "四脚着地自然行走前后脚交替移动，逐渐减速停下四脚站稳，然后后腿弯曲臀部下沉坐到地面，前腿直立呈坐姿",
-            "walk2rest": "四脚着地自然行走前后脚交替移动，逐渐减速停下四脚站稳，身体向前倾前腿向前伸展后腿向后伸展，肚子胸部贴地呈趴卧，头抬起眼睛睁开",
-            "walk2sleep": "四脚着地自然行走前后脚交替移动，逐渐减速停下，身体趴下四肢放松伸展肚子贴地，头放下闭眼，嘴微张打呼噜鼻子有气体呼入呼出",
-            "sleep2sit": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，前腿后腿同时用力四脚着地撑起身体（不能只用前脚），后腿弯曲坐下前腿直立呈坐姿",
-            "sleep2rest": "从睡觉身体趴着闭眼打呼噜状态，慢慢睁眼停止打呼噜，头抬起，保持趴卧但呈警觉状态，眼睛睁开环顾四周",
-            "sleep2walk": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，前腿后腿同时用力四脚着地站起身（不能只用前脚），然后自然行走前后脚交替移动不跳跃",
-        }
-    else:
-        # 简化版 - 保持简洁
-        transition_actions = {
-            "sit2walk": "从坐姿四脚着地站起，自然行走，前后脚交替，不跳跃",
-            "sit2rest": "从坐姿向前趴下，肚子贴地，头抬起，眼睛睁开",
-            "sit2sleep": "从坐姿趴下，头放下，闭眼，趴着打呼噜",
-            "rest2sleep": "保持趴姿，头放下，闭眼，开始打呼噜",
-            "rest2sit": "从趴姿四脚着地撑起身体，后腿弯曲坐下",
-            "rest2walk": "从趴姿四脚着地站起，自然行走，前后脚交替",
-            "walk2sit": "行走中减速停下，后腿弯曲坐下",
-            "walk2rest": "行走中减速停下，向前趴下，头抬起",
-            "walk2sleep": "行走中减速停下，趴下，闭眼打呼噜",
-            "sleep2sit": "睁眼，四脚着地站起，后腿弯曲坐下",
-            "sleep2rest": "睁眼，保持趴姿，头抬起警觉",
-            "sleep2walk": "睁眼，四脚着地站起，自然行走，前后脚交替",
-        }
-
-    action = transition_actions.get(transition, "宠物进行动作过渡")
-
-    # 风格描述
-    if species_type == "狗":
-        style = "3D卡通动画风格"
-    else:
-        style_type = breed_config.get("style_type", "realistic")
-        if style_type == "disney_realistic":
-            style = "迪士尼3D动画风格"
-        else:
-            style = "写实渲染风格"
-
-    prompt = (
-        f"{style}，{color}{breed_name}的{body_type}，{breed_features}"
-        f"纯白色背景，{action}，镜头正对{species_name}的正前方。"
-    )
-
-    return prompt
 
 
 def generate_loop_prompt_v3(
@@ -245,56 +158,104 @@ def generate_loop_prompt_v3(
     color: str
 ) -> str:
     """
-    生成循环视频的prompt (v3.0)
-    
+    生成循环视频的prompt (v3.0单行格式)
+
     Args:
         pose: 姿势名称 (如 "sit", "walk", "rest", "sleep")
         breed_name: 品种名
-        body_type: 体型
-        color: 颜色
-    
+        body_type: 体型 [未使用]
+        color: 颜色 [未使用]
+
     Returns:
         循环视频prompt
     """
     breed_config = get_breed_config(breed_name)
+
     if not breed_config:
         return f"错误: 未找到品种配置 {breed_name}"
-    
-    species_type = breed_config["species_type"]
+
+    species_type = breed_config.get("species_type", "狗")
     species_name = "犬" if species_type == "狗" else "猫"
-    
-    # 姿势动作描述
+
+    # 姿势动作描述 - 参考截图格式
     pose_actions = {
-        "sit": "坐着",
-        "walk": "四脚着地自然往前走，前后脚交替移动，不能同时离地",
-        "rest": "趴下但是睁着眼睛",
-        "sleep": "趴着睡觉，眼睛闭上，打呼噜，有气体呼入呼出"
+        "sit": "坐在地上四处张望",
+        "walk": "往前走，不要双脚同时离地，镜头跟随宠物移动保持距离不变",
+        "rest": "趴在地上四处张望",
+        "sleep": "在睡觉，打呼噜，有气体呼入呼出"
     }
-    
+
     action = pose_actions.get(pose, "保持姿势")
-    
-    # 风格描述
-    if species_type == "狗":
-        style = "3D卡通动画风格"
+
+    # Walk动作的镜头描述已经包含在action中，不需要重复
+    if pose == "walk":
+        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}。"
     else:
-        style_type = breed_config.get("style_type", "realistic")
-        if style_type == "disney_realistic":
-            style = "迪士尼3D动画风格"
-        else:
-            style = "写实渲染风格"
-    
-    prompt = (
-        f"{style}，{color}{breed_name}的{body_type}，纯白色背景，"
-        f"{action}，镜头正对{species_name}的正前方。"
-    )
-    
+        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}，镜头面对{species_name}的正前方。"
+
+    return prompt
+
+
+def generate_transition_prompt_v3(
+    transition: str,
+    breed_name: str,
+    body_type: str,
+    color: str,
+    use_detailed: bool = True
+) -> str:
+    """
+    生成过渡视频的prompt (v3.0单行格式)
+
+    Args:
+        transition: 过渡名称 (如 "sit2walk")
+        breed_name: 品种名
+        body_type: 体型 [未使用]
+        color: 颜色 [未使用]
+        use_detailed: 是否使用详细描述 [未使用]
+
+    Returns:
+        过渡视频prompt
+    """
+    breed_config = get_breed_config(breed_name)
+
+    if not breed_config:
+        return f"错误: 未找到品种配置 {breed_name}"
+
+    species_type = breed_config.get("species_type", "狗")
+    species_name = "犬" if species_type == "狗" else "猫"
+
+    # 过渡动作描述 - 参考截图格式
+    transition_actions = {
+        "sit2walk": "从坐姿自然站起，不要双脚同时离地，然后自然行走前后交替移动，镜头跟随宠物移动保持距离不变",
+        "sit2rest": "从坐姿身体向前倾，前腿向前伸展后腿向后伸展，肚子前部贴地呈趴卧姿势，头抬起眼睛睁开",
+        "sit2sleep": "从坐姿身体向前倾倒趴下，四肢放松伸展肚子贴地，头放下贴近地面，闭眼，嘴微张有节奏打呼噜，鼻子有气体呼入呼出",
+        "rest2sleep": "保持趴姿肚子贴地，头慢慢放下，眼睛缓缓闭上，身体完全放松，嘴微张有节奏打呼噜，鼻子有明显气体呼入呼出",
+        "rest2sit": "从趴卧姿势自然挺身，不要双脚同时离地，后腿弯曲臀部下沉呈坐姿",
+        "rest2walk": "从趴卧姿势自然站起，不要双脚同时离地，然后自然行走前后交替移动，镜头跟随宠物移动保持距离不变",
+        "walk2sit": "四脚着地自然行走前后交替移动，逐渐减速停下，后腿弯曲臀部下沉呈坐姿",
+        "walk2rest": "四脚着地自然行走前后交替移动，逐渐减速停下，身体向前趴下肚子贴地，头抬起眼睛睁开",
+        "walk2sleep": "四脚着地自然行走前后交替移动，逐渐减速停下趴下，头放下闭眼，嘴微张打呼噜",
+        "sleep2sit": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，自然挺起身体，不要双脚同时离地，后腿弯曲坐下前腿直立呈坐姿",
+        "sleep2rest": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，头抬起，保持趴卧但呈警觉状态，眼睛睁开环顾四周",
+        "sleep2walk": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，自然站起，不要双脚同时离地，然后自然行走前后交替移动，镜头跟随宠物移动保持距离不变"
+    }
+
+    action = transition_actions.get(transition, "宠物进行动作过渡")
+
+    # 涉及walk的过渡动作，镜头描述已经包含在action中，不需要重复
+    walk_transitions = ["sit2walk", "rest2walk", "sleep2walk"]
+    if transition in walk_transitions:
+        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}。"
+    else:
+        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}，镜头面对{species_name}的正前方。"
+
     return prompt
 
 
 if __name__ == "__main__":
     # 测试用例
     print("=== Prompt生成器 v3.0 测试 ===\n")
-    
+
     test_cases = [
         {
             "breed": "西高地白梗",
@@ -332,10 +293,9 @@ if __name__ == "__main__":
             "color": "蓝灰色"
         }
     ]
-    
+
     for i, case in enumerate(test_cases, 1):
         print(f"【测试{i}: {case['breed']} - {case['weight']}kg】")
         prompt = generate_sit_prompt_v3(**case)
         print(prompt)
         print("\n" + "="*60 + "\n")
-
