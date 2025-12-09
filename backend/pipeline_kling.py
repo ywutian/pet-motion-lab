@@ -13,6 +13,7 @@ import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Callable, Any
 from kling_api_helper import KlingAPI
+import config
 from prompt_config.prompts import (
     FIRST_TRANSITIONS,
     POSES,
@@ -117,16 +118,24 @@ class KlingPipeline:
         video_access_key: str = None,
         video_secret_key: str = None,
     ):
-        # 图片 API 实例
-        self.kling = KlingAPI(access_key, secret_key)
+        # 图片 API 实例 - 明确使用国内版
+        self.kling = KlingAPI(
+            access_key,
+            secret_key,
+            base_url="https://api-beijing.klingai.com"
+        )
 
-        # 视频 API 实例（如果提供了独立密钥则使用，否则复用图片 API 密钥）
+        # 视频 API 实例 - 使用海外版
         if video_access_key and video_secret_key:
-            self.kling_video = KlingAPI(video_access_key, video_secret_key)
-            print("✅ 视频生成使用独立 API 密钥")
+            self.kling_video = KlingAPI(
+                video_access_key,
+                video_secret_key,
+                base_url=config.KLING_OVERSEAS_BASE_URL
+            )
+            print("✅ 视频生成使用独立 API 密钥（海外版）")
         else:
             self.kling_video = self.kling
-            print("ℹ️ 视频生成复用图片 API 密钥")
+            print("ℹ️ 视频生成复用图片 API 密钥（国内版）")
 
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

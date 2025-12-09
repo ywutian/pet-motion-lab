@@ -15,10 +15,11 @@ from pathlib import Path
 class KlingAPI:
     """可灵AI API封装类"""
 
-    def __init__(self, access_key: str, secret_key: str):
+    def __init__(self, access_key: str, secret_key: str, base_url: str = None):
         self.access_key = access_key
         self.secret_key = secret_key
-        self.base_url = "https://api-beijing.klingai.com"
+        # 默认使用国内版，允许通过参数覆盖
+        self.base_url = base_url or "https://api-beijing.klingai.com"
 
         # 调试信息
         if not self.access_key:
@@ -30,6 +31,8 @@ class KlingAPI:
             print("❌ 错误: secret_key 为空！")
         else:
             print(f"✅ secret_key 已设置: {self.secret_key[:10]}...")
+
+        print(f"✅ 使用API端点: {self.base_url}")
 
     def _encode_jwt_token(self) -> str:
         """生成JWT Token（遵循可灵AI官方文档）"""

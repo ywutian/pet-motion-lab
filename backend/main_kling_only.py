@@ -82,6 +82,7 @@ async def health_check():
         KLING_SECRET_KEY,
         KLING_VIDEO_ACCESS_KEY,
         KLING_VIDEO_SECRET_KEY,
+        KLING_OVERSEAS_BASE_URL,
     )
 
     return {
@@ -93,6 +94,10 @@ async def health_check():
             "kling_ai": "available",
             "background_removal": "available",
             "flux_models": "disabled"
+        },
+        "api_endpoints": {
+            "image_api": "https://api-beijing.klingai.com",
+            "video_api": KLING_OVERSEAS_BASE_URL
         },
         "api_keys": {
             "image_access_key": f"{KLING_ACCESS_KEY[:8]}..." if KLING_ACCESS_KEY else "NOT_SET",
