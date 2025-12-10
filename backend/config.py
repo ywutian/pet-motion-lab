@@ -40,3 +40,22 @@ if not KLING_VIDEO_ACCESS_KEY or not KLING_VIDEO_SECRET_KEY:
     print("   请在环境变量中设置，或在本地开发时使用 .env 文件")
 else:
     print(f"✅ 可灵AI视频密钥已配置")
+
+# ============================================
+# Google AI API 配置（用于图片内容审核）
+# ============================================
+
+# Google Gemini API密钥（可选，用于AI图片预处理）
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
+# 是否启用AI图片预处理（默认启用，如果有API Key）
+ENABLE_AI_IMAGE_CHECK = os.getenv("ENABLE_AI_IMAGE_CHECK", "true").lower() in ("true", "1", "yes")
+
+if GOOGLE_API_KEY and ENABLE_AI_IMAGE_CHECK:
+    print(f"✅ Google AI图片检查已启用")
+elif ENABLE_AI_IMAGE_CHECK and not GOOGLE_API_KEY:
+    print("⚠️ 警告: 启用了AI图片检查但未设置 GOOGLE_API_KEY")
+    print("   AI图片预处理功能将不可用")
+    ENABLE_AI_IMAGE_CHECK = False
+else:
+    print("ℹ️ AI图片检查未启用（可通过 ENABLE_AI_IMAGE_CHECK=true 启用）")

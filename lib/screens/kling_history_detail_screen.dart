@@ -74,12 +74,19 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
             Text(_detail?['breed'] ?? '详情'),
             if (videoModel.isNotEmpty)
               Text(
-                '$videoModel ($videoMode)',
+                '🎬 $videoModel ($videoMode)',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
               ),
           ],
         ),
         actions: [
+          // AI 检测报告按钮
+          if (_detail?['ai_check_result'] != null)
+            IconButton(
+              icon: const Icon(Icons.analytics),
+              tooltip: 'AI 检测报告',
+              onPressed: _showAICheckReport,
+            ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.download),
             onSelected: _downloadZip,
@@ -102,6 +109,342 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
       ),
       body: _buildBody(),
     );
+  }
+
+  /// 显示 AI 检测报告弹窗
+  void _showAICheckReport() {
+    final aiResult = _detail?['ai_check_result'];
+    if (aiResult == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // 拖动指示器
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // 标题
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.analytics, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '🤖 AI 图片检测报告',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // 报告内容
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildAIReportSection(aiResult),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建 AI 报告内容
+  Widget _buildAIReportSection(Map<String, dynamic> aiResult) {
+    final contentSafety = aiResult['content_safety'] ?? {};
+    final petDetection = aiResult['pet_detection'] ?? {};
+    final poseAnalysis = aiResult['pose_analysis'] ?? {};
+    final backgroundQuality = aiResult['background_quality'] ?? {};
+    final featureCompleteness = aiResult['feature_completeness'] ?? {};
+    final overallAssessment = aiResult['overall_assessment'] ?? {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 整体评估卡片
+        _buildReportCard(
+          title: '⭐ 整体评估',
+          color: overallAssessment['suitable_for_generation'] == true 
+              ? Colors.green 
+              : Colors.orange,
+          children: [
+            _buildReportRow('适合生成', overallAssessment['suitable_for_generation'] == true ? '✅ 是' : '❌ 否'),
+            _buildReportRow('置信度', '${((overallAssessment['confidence_score'] ?? 0) * 100).toStringAsFixed(0)}%'),
+            _buildReportRow('严重程度', _getSeverityText(overallAssessment['severity_level'])),
+            if (overallAssessment['summary'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  overallAssessment['summary'],
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 宠物检测
+        _buildReportCard(
+          title: '🐾 宠物检测',
+          color: Colors.blue,
+          children: [
+            _buildReportRow('检测结果', petDetection['detected'] == true ? '✅ 检测到' : '❌ 未检测到'),
+            _buildReportRow('物种', petDetection['species'] == 'dog' ? '🐕 狗' : petDetection['species'] == 'cat' ? '🐱 猫' : '未知'),
+            _buildReportRow('置信度', '${((petDetection['confidence'] ?? 0) * 100).toStringAsFixed(0)}%'),
+            _buildReportRow('数量', '${petDetection['count'] ?? 0} 只'),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 姿势分析
+        _buildReportCard(
+          title: '🎭 姿势分析',
+          color: Colors.purple,
+          children: [
+            _buildReportRow('姿势', _getPostureText(poseAnalysis['posture'])),
+            _buildReportRow('是否坐姿', poseAnalysis['is_sitting'] == true ? '✅ 是（最佳）' : '❌ 否'),
+            _buildReportRow('清晰度', '${((poseAnalysis['clarity'] ?? 0) * 100).toStringAsFixed(0)}%'),
+            if (poseAnalysis['description'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  poseAnalysis['description'],
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 背景质量
+        _buildReportCard(
+          title: '🎨 背景质量',
+          color: Colors.teal,
+          children: [
+            _buildReportRow('类型', _getBackgroundTypeText(backgroundQuality['type'])),
+            _buildReportRow('是否干净', backgroundQuality['is_clean'] == true ? '✅ 是' : '❌ 否'),
+            _buildReportRow('去除难度', _getDifficultyText(backgroundQuality['removal_difficulty'])),
+            if (backgroundQuality['description'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  backgroundQuality['description'],
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 特征完整性
+        _buildReportCard(
+          title: '📐 特征完整性',
+          color: Colors.orange,
+          children: [
+            _buildReportRow('完整度', '${((featureCompleteness['completeness_score'] ?? 0) * 100).toStringAsFixed(0)}%'),
+            _buildReportRow('拍摄角度', _getAngleText(featureCompleteness['angle_quality'])),
+            _buildReportRow('光照质量', _getLightingText(featureCompleteness['lighting_quality'])),
+            _buildReportRow('对焦质量', _getFocusText(featureCompleteness['focus_quality'])),
+            if (featureCompleteness['visible_features'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: (featureCompleteness['visible_features'] as List)
+                      .map<Widget>((f) => Chip(
+                            label: Text(_getFeatureText(f), style: const TextStyle(fontSize: 11)),
+                            padding: EdgeInsets.zero,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ))
+                      .toList(),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 内容安全
+        _buildReportCard(
+          title: '🔒 内容安全',
+          color: contentSafety['safe'] == true ? Colors.green : Colors.red,
+          children: [
+            _buildReportRow('安全状态', contentSafety['safe'] == true ? '✅ 安全' : '❌ 不安全'),
+            if (contentSafety['issues'] != null && (contentSafety['issues'] as List).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '问题: ${(contentSafety['issues'] as List).join(', ')}',
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportCard({
+    required String title,
+    required Color color,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border(left: BorderSide(color: color, width: 4)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey[600])),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  String _getSeverityText(String? severity) {
+    switch (severity) {
+      case 'pass': return '✅ 通过';
+      case 'warning': return '⚠️ 警告';
+      case 'error': return '❌ 严重';
+      default: return '未知';
+    }
+  }
+
+  String _getPostureText(String? posture) {
+    switch (posture) {
+      case 'sitting': return '🪑 坐姿';
+      case 'standing': return '🧍 站姿';
+      case 'lying': return '🛌 躺姿';
+      case 'walking': return '🚶 行走';
+      case 'playing': return '🎾 玩耍';
+      default: return posture ?? '未知';
+    }
+  }
+
+  String _getBackgroundTypeText(String? type) {
+    switch (type) {
+      case 'solid': return '纯色';
+      case 'simple': return '简单';
+      case 'medium': return '中等';
+      case 'complex': return '复杂';
+      case 'cluttered': return '杂乱';
+      default: return type ?? '未知';
+    }
+  }
+
+  String _getDifficultyText(String? difficulty) {
+    switch (difficulty) {
+      case 'easy': return '🟢 容易';
+      case 'medium': return '🟡 中等';
+      case 'hard': return '🔴 困难';
+      default: return difficulty ?? '未知';
+    }
+  }
+
+  String _getAngleText(String? angle) {
+    switch (angle) {
+      case 'frontal': return '正面';
+      case 'side': return '侧面';
+      case 'three-quarter': return '四分之三';
+      case 'back': return '背面';
+      case 'top': return '俯视';
+      default: return angle ?? '未知';
+    }
+  }
+
+  String _getLightingText(String? lighting) {
+    switch (lighting) {
+      case 'excellent': return '⭐ 优秀';
+      case 'good': return '👍 良好';
+      case 'fair': return '👌 一般';
+      case 'poor': return '👎 较差';
+      default: return lighting ?? '未知';
+    }
+  }
+
+  String _getFocusText(String? focus) {
+    switch (focus) {
+      case 'sharp': return '🎯 清晰';
+      case 'acceptable': return '👌 可接受';
+      case 'blurry': return '😵 模糊';
+      default: return focus ?? '未知';
+    }
+  }
+
+  String _getFeatureText(String feature) {
+    switch (feature) {
+      case 'face': return '脸部';
+      case 'ears': return '耳朵';
+      case 'eyes': return '眼睛';
+      case 'nose': return '鼻子';
+      case 'mouth': return '嘴巴';
+      case 'body': return '身体';
+      case 'legs': return '腿';
+      case 'tail': return '尾巴';
+      case 'paws': return '爪子';
+      default: return feature;
+    }
   }
 
   Widget _buildBody() {

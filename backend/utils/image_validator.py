@@ -205,46 +205,97 @@ class ImageValidator:
         return True, warning_msg, metrics
 
     @staticmethod
-    def validate_pet_content(file_path: str) -> Tuple[bool, Optional[str], Dict]:
+    def validate_pet_content(file_path: str, enable_ai_check: bool = False, google_api_key: str = None) -> Tuple[bool, Optional[str], Dict]:
         """
-        验证图片是否包含宠物（可选功能，需要AI模型）
-
-        注意：这个功能需要额外的依赖和模型，目前返回占位符
-        未来可以集成：
-        - 百度AI、阿里云、腾讯云的图像识别API
-        - 本地YOLO/ResNet等模型
+        验证图片是否包含宠物（可选AI检测）
 
         Args:
             file_path: 文件路径
+            enable_ai_check: 是否启用AI检测（需要Google API Key）
+            google_api_key: Google API密钥（可选，默认从环境变量读取）
 
         Returns:
             (是否通过, 错误/警告信息, 检测结果)
         """
-        # TODO: 集成AI内容检测
-        # 目前返回通过，不做内容检测
-        return True, None, {
-            'detected': None,
-            'confidence': None,
-            'message': '内容检测功能尚未启用'
-        }
+        if not enable_ai_check:
+            # 不启用AI检测，直接返回通过
+            return True, None, {
+                'detected': None,
+                'confidence': None,
+                'message': 'AI内容检测未启用'
+            }
+
+        # 尝试导入AI检查模块
+        try:
+            from .ai_content_checker import check_image_with_ai
+        except ImportError:
+            return True, "AI检查模块导入失败，跳过AI检测", {
+                'detected': None,
+                'confidence': None,
+                'message': 'AI模块不可用'
+            }
+
+        # 执行AI检查
+        try:
+            ai_result = check_image_with_ai(file_path, api_key=google_api_key)
+
+            # 提取检测结果
+            pet_detection = ai_result.get('pet_detection', {})
+            detected = pet_detection.get('detected', False)
+            confidence = pet_detection.get('confidence', 0.0)
+
+            detection_result = {
+                'detected': detected,
+                'species': pet_detection.get('species'),
+                'confidence': confidence,
+                'count': pet_detection.get('count', 0),
+                'ai_result': ai_result  # 保存完整的AI分析结果
+            }
+
+            # 如果未检测到宠物，返回警告
+            if not detected:
+                return False, "未检测到宠物，请确保图片中包含清晰的猫或狗", detection_result
+
+            # 如果检测到多只宠物，返回警告
+            if pet_detection.get('count', 1) > 1:
+                return False, f"检测到{pet_detection.get('count')}只宠物，建议图片中只包含一只宠物", detection_result
+
+            return True, None, detection_result
+
+        except Exception as e:
+            # AI检查失败不应阻止用户上传，返回警告
+            return True, f"AI检测失败: {str(e)}", {
+                'detected': None,
+                'confidence': None,
+                'error': str(e)
+            }
 
     @classmethod
-    def validate_all(cls, file_path: str, strict_mode: bool = False) -> Dict:
+    def validate_all(
+        cls,
+        file_path: str,
+        strict_mode: bool = False,
+        enable_ai_check: bool = False,
+        google_api_key: str = None
+    ) -> Dict:
         """
-        执行所有验证检查
+        执行所有验证检查（包括可选的AI检查）
 
         Args:
             file_path: 文件路径
             strict_mode: 严格模式（质量警告也会导致验证失败）
+            enable_ai_check: 是否启用AI内容检查
+            google_api_key: Google API密钥（用于AI检查）
 
         Returns:
-            验证结果字典
+            验证结果字典，包含分级的严重程度
         """
         result = {
             'valid': True,
             'errors': [],
             'warnings': [],
-            'metrics': {}
+            'metrics': {},
+            'severity_level': 'pass'  # pass/warning/error
         }
 
         # 1. 文件大小验证
@@ -295,28 +346,130 @@ class ImageValidator:
 
         result['metrics'].update(metrics)
 
-        # 5. 宠物内容检测（可选）
-        is_valid, msg, detection_result = cls.validate_pet_content(file_path)
-        result['metrics']['pet_detection'] = detection_result
-        if not is_valid:
-            result['warnings'].append({
-                'code': 'PET_DETECTION_WARNING',
-                'message': msg or '未检测到宠物，请确保图片包含清晰的宠物'
-            })
+        # 5. AI内容检测（可选，包含宠物检测、姿势分析、背景质量等）
+        if enable_ai_check:
+            is_valid, msg, detection_result = cls.validate_pet_content(
+                file_path,
+                enable_ai_check=True,
+                google_api_key=google_api_key
+            )
+            result['metrics']['ai_analysis'] = detection_result
+
+            # 提取AI分析结果
+            ai_result = detection_result.get('ai_result', {})
+            overall_assessment = ai_result.get('overall_assessment', {})
+            severity = overall_assessment.get('severity_level', 'pass')
+
+            # 更新整体严重程度
+            if severity == 'error':
+                result['severity_level'] = 'error'
+            elif severity == 'warning' and result['severity_level'] == 'pass':
+                result['severity_level'] = 'warning'
+
+            # 处理AI检测结果
+            if not is_valid:
+                # 未通过基础宠物检测
+                result['errors'].append({
+                    'code': 'AI_PET_DETECTION_FAILED',
+                    'message': msg,
+                    'severity': 'error'
+                })
+                result['valid'] = False
+                result['severity_level'] = 'error'
+
+            # 添加AI分析的详细问题和建议
+            if ai_result:
+                # 内容安全检查
+                content_safety = ai_result.get('content_safety', {})
+                if not content_safety.get('safe', True):
+                    result['errors'].append({
+                        'code': 'CONTENT_SAFETY_VIOLATION',
+                        'message': '图片包含不良内容: ' + ', '.join(content_safety.get('issues', [])),
+                        'severity': 'error'
+                    })
+                    result['valid'] = False
+                    result['severity_level'] = 'error'
+
+                # 姿势分析
+                pose_analysis = ai_result.get('pose_analysis', {})
+                if not pose_analysis.get('is_sitting', False):
+                    result['warnings'].append({
+                        'code': 'NON_SITTING_POSE',
+                        'message': f"宠物姿势为{pose_analysis.get('posture', 'unknown')}，推荐使用坐姿图片以获得最佳生成效果",
+                        'severity': 'warning',
+                        'suggestions': pose_analysis.get('suggestions', [])
+                    })
+                    if result['severity_level'] == 'pass':
+                        result['severity_level'] = 'warning'
+
+                # 背景质量
+                background_quality = ai_result.get('background_quality', {})
+                if not background_quality.get('is_clean', True):
+                    difficulty = background_quality.get('removal_difficulty', 'unknown')
+                    if difficulty == 'hard':
+                        result['warnings'].append({
+                            'code': 'COMPLEX_BACKGROUND',
+                            'message': f"背景复杂({background_quality.get('type', 'unknown')})，可能难以完全去除",
+                            'severity': 'warning',
+                            'suggestions': background_quality.get('suggestions', [])
+                        })
+                        if result['severity_level'] == 'pass':
+                            result['severity_level'] = 'warning'
+
+                # 特征完整性
+                feature_completeness = ai_result.get('feature_completeness', {})
+                completeness_score = feature_completeness.get('completeness_score', 1.0)
+                if completeness_score < 0.7:
+                    result['warnings'].append({
+                        'code': 'INCOMPLETE_FEATURES',
+                        'message': f"宠物特征不完整(完整度: {completeness_score:.0%})，可能影响生成质量",
+                        'severity': 'warning',
+                        'missing_features': feature_completeness.get('missing_features', []),
+                        'suggestions': feature_completeness.get('suggestions', [])
+                    })
+                    if result['severity_level'] == 'pass':
+                        result['severity_level'] = 'warning'
+
+                # 添加AI的总体建议
+                recommendations = overall_assessment.get('recommendations', [])
+                if recommendations:
+                    result['metrics']['ai_recommendations'] = recommendations
+
+        else:
+            # 不启用AI检测，使用旧的简单检测
+            is_valid, msg, detection_result = cls.validate_pet_content(file_path, enable_ai_check=False)
+            result['metrics']['pet_detection'] = detection_result
 
         return result
 
 
 # 便捷函数
-def validate_image(file_path: str, strict_mode: bool = False) -> Dict:
+def validate_image(
+    file_path: str,
+    strict_mode: bool = False,
+    enable_ai_check: bool = False,
+    google_api_key: str = None
+) -> Dict:
     """
     验证图片的便捷函数
 
     Args:
         file_path: 图片文件路径
         strict_mode: 是否启用严格模式
+        enable_ai_check: 是否启用AI内容检查
+        google_api_key: Google API密钥
 
     Returns:
-        验证结果字典
+        验证结果字典，包含：
+        - valid: bool - 是否通过验证
+        - errors: List[Dict] - 错���列表
+        - warnings: List[Dict] - 警告列表
+        - metrics: Dict - 检测指标
+        - severity_level: str - 严重程度 (pass/warning/error)
     """
-    return ImageValidator.validate_all(file_path, strict_mode)
+    return ImageValidator.validate_all(
+        file_path,
+        strict_mode=strict_mode,
+        enable_ai_check=enable_ai_check,
+        google_api_key=google_api_key
+    )
