@@ -13,6 +13,8 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Callable, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 from kling_api_helper import KlingAPI
 import config
 from prompt_config.prompts import (
@@ -462,17 +464,19 @@ class KlingPipeline:
         self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
         self._wait_interval(self.step_interval, "步骤4完成")
 
-        # ==================== 步骤5: 生成剩余过渡视频 ====================
-        self._update_status(55, "步骤5: 生成剩余过渡视频...", "step5")
-        print("\n🎬 步骤5: 生成剩余过渡视频")
+        # ==================== 步骤5: 并发生成剩余过渡视频 ====================
+        self._update_status(55, "步骤5: 并发生成剩余过渡视频（并发数：3）...", "step5")
+        print("\n🎬 步骤5: 并发生成剩余过渡视频")
+        print("  📌 可灵API支持并发3，将同时生成多个视频以加速")
         remaining_videos = self._generate_remaining_transitions()
         results["steps"]["remaining_transitions"] = remaining_videos
 
         self._wait_interval(self.step_interval, "步骤5完成")
 
-        # ==================== 步骤6: 生成循环视频 ====================
-        self._update_status(75, "步骤6: 生成循环视频...", "step6")
-        print("\n🔄 步骤6: 生成循环视频")
+        # ==================== 步骤6: 并发生成循环视频 ====================
+        self._update_status(75, "步骤6: 并发生成循环视频（并发数：3）...", "step6")
+        print("\n🔄 步骤6: 并发生成循环视频")
+        print("  📌 4个循环视频将并发生成")
         loop_videos = self._generate_loop_videos()
         results["steps"]["loop_videos"] = loop_videos
 
@@ -711,17 +715,19 @@ class KlingPipeline:
         self._update_status(50, "步骤4完成: 3个过渡视频 + 首尾帧已提取", "step4_done")
         self._wait_interval(self.step_interval, "步骤4完成")
 
-        # ==================== 步骤5: 生成剩余过渡视频 ====================
-        self._update_status(55, "步骤5: 生成剩余过渡视频...", "step5")
-        print("\n🎬 步骤5: 生成剩余过渡视频")
+        # ==================== 步骤5: 并发生成剩余过渡视频 ====================
+        self._update_status(55, "步骤5: 并发生成剩余过渡视频（并发数：3）...", "step5")
+        print("\n🎬 步骤5: 并发生成剩余过渡视频")
+        print("  📌 可灵API支持并发3，将同时生成多个视频以加速")
         remaining_videos = self._generate_remaining_transitions()
         results["steps"]["remaining_transitions"] = remaining_videos
 
         self._wait_interval(self.step_interval, "步骤5完成")
 
-        # ==================== 步骤6: 生成循环视频 ====================
-        self._update_status(75, "步骤6: 生成循环视频...", "step6")
-        print("\n🔄 步骤6: 生成循环视频")
+        # ==================== 步骤6: 并发生成循环视频 ====================
+        self._update_status(75, "步骤6: 并发生成循环视频（并发数：3）...", "step6")
+        print("\n🔄 步骤6: 并发生成循环视频")
+        print("  📌 4个循环视频将并发生成")
         loop_videos = self._generate_loop_videos()
         results["steps"]["loop_videos"] = loop_videos
 
@@ -756,16 +762,14 @@ class KlingPipeline:
 
     def _generate_base_image(self, pose: str, transparent_image: str) -> str:
         """生成基准图（图生图），带重试机制"""
-        # 使用v3.0 prompt系统（唯一版本）始终生成三行prompt
+        # 使用v3.0 prompt系统（唯一版本）生成结构化单行prompt
         from prompt_config.prompt_generator_v3 import generate_sit_prompt_v3
-        prompt = generate_sit_prompt_v3(
+        prompt, negative_prompt = generate_sit_prompt_v3(
             breed_name=self.breed,
-            weight=self.weight,
-            gender=self.gender,
-            birthday=self.birthday,
-            color=self.color,
+            species=self.species,
         )
-        print(f"  使用v3.0 Prompt生成器 (三行格式)")
+        print(f"  使用v3.0 Prompt生成器 (支持negative_prompt)")
+        print(f"  负向提示词: {negative_prompt}")
 
         print(f"  提示词: {prompt}")
         print(f"  使用图生图API，输入图片: {transparent_image}")
@@ -775,6 +779,7 @@ class KlingPipeline:
             result = self.kling.image_to_image(
                 image_path=transparent_image,
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 aspect_ratio="1:1",
                 image_count=1
             )
@@ -805,7 +810,127 @@ class KlingPipeline:
         return output_path
 
     def _generate_first_transitions(self, sit_image: str) -> tuple:
-        """生成前3个过渡视频并提取首尾帧"""
+        """
+        生成前3个过渡视频并提取首尾帧（优化版：部分并发）
+        
+        优化策略：
+        - sit2walk 和 sit2rest 可以并发（都从 sit.png 开始）
+        - rest2sleep 需要等 sit2rest 完成后才能开始（需要 rest.png）
+        """
+        videos = {}
+        other_poses = {}
+        first_frames = {}
+        last_frames = {}
+
+        print("\n📦 优化生成策略：sit2walk + sit2rest 并发，然后 rest2sleep")
+        
+        # ========== 阶段1: 并发生成 sit2walk 和 sit2rest ==========
+        self._update_status(35, "步骤4.1: 并发生成 sit2walk + sit2rest...", "step4.1")
+        print("\n  🚀 阶段1: 并发生成 sit2walk 和 sit2rest（并发数：2）")
+        print("  🔄 重试配置: 最多 3 次，间隔 30 秒")
+        
+        parallel_transitions = ["sit2walk", "sit2rest"]
+        max_retries = 3
+        retry_delay = 30
+        
+        def generate_with_retry(transition, start_img, max_attempts=3):
+            """带重试的单个视频生成"""
+            last_error = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    print(f"    [{transition}] 第{attempt}次尝试...")
+                    video_path = self._generate_transition_video_no_wait(transition, start_img)
+                    return video_path, None
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"    [{transition}] 第{attempt}次失败: {last_error[:50]}...")
+                    if attempt < max_attempts:
+                        print(f"    [{transition}] 等待 {retry_delay} 秒后重试...")
+                        time.sleep(retry_delay)
+            return None, last_error
+        
+        # 并发执行（带重试）
+        parallel_results = {}
+        failed_transitions = []
+        
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_to_task = {
+                executor.submit(generate_with_retry, t, sit_image, max_retries): t
+                for t in parallel_transitions
+            }
+            
+            for future in as_completed(future_to_task):
+                transition = future_to_task[future]
+                try:
+                    video_path, error = future.result()
+                    if video_path:
+                        parallel_results[transition] = video_path
+                        videos[transition] = video_path
+                        print(f"  ✅ {transition} 完成")
+                        
+                        # 提取首尾帧
+                        end_pose = transition.split("2")[1]
+                        
+                        # 提取首帧
+                        first_frame_path = str(self.images_dir / f"{transition}_first_frame.png")
+                        extract_first_frame(video_path, first_frame_path)
+                        first_frames[transition] = first_frame_path
+                        
+                        # 提取尾帧
+                        end_image_path = str(self.images_dir / f"{end_pose}.png")
+                        last_frame_path = str(self.images_dir / f"{transition}_last_frame.png")
+                        extract_last_frame(video_path, end_image_path)
+                        extract_last_frame(video_path, last_frame_path)
+                        other_poses[end_pose] = end_image_path
+                        last_frames[transition] = last_frame_path
+                        print(f"  ✅ {end_pose}.png 已提取")
+                    else:
+                        print(f"  ❌ {transition} 最终失败: {error}")
+                        failed_transitions.append(transition)
+                        
+                except Exception as e:
+                    print(f"  ❌ {transition} 异常: {e}")
+                    failed_transitions.append(transition)
+        
+        if failed_transitions:
+            print(f"\n  ⚠️ 警告: {len(failed_transitions)} 个视频生成失败: {failed_transitions}")
+        
+        self._update_status(42, "步骤4.1完成: sit2walk + sit2rest 已生成", "step4.1_done")
+        
+        # ========== 阶段2: 生成 rest2sleep ==========
+        self._update_status(43, "步骤4.2: 生成 rest2sleep...", "step4.2")
+        print("\n  🎬 阶段2: 生成 rest2sleep（需要 rest.png）")
+        
+        rest_image = other_poses.get("rest")
+        if not rest_image:
+            raise Exception("rest.png 尚未生成，无法生成 rest2sleep")
+        
+        try:
+            video_path = self._generate_transition_video("rest2sleep", rest_image)
+            videos["rest2sleep"] = video_path
+            
+            # 提取首尾帧
+            first_frame_path = str(self.images_dir / "rest2sleep_first_frame.png")
+            extract_first_frame(video_path, first_frame_path)
+            first_frames["rest2sleep"] = first_frame_path
+            
+            end_image_path = str(self.images_dir / "sleep.png")
+            last_frame_path = str(self.images_dir / "rest2sleep_last_frame.png")
+            extract_last_frame(video_path, end_image_path)
+            extract_last_frame(video_path, last_frame_path)
+            other_poses["sleep"] = end_image_path
+            last_frames["rest2sleep"] = last_frame_path
+            print(f"  ✅ sleep.png 已提取")
+            
+        except Exception as e:
+            print(f"  ❌ rest2sleep 失败: {e}")
+        
+        self._update_status(50, "步骤4完成: 3个初始视频 + 首尾帧已提取", "step4_done")
+        
+        return videos, other_poses, first_frames, last_frames
+
+    def _generate_first_transitions_sequential(self, sit_image: str) -> tuple:
+        """生成前3个过渡视频并提取首尾帧（顺序版本，备用）"""
         videos = {}
         other_poses = {}
         first_frames = {}
@@ -872,14 +997,14 @@ class KlingPipeline:
                 self.body_type = ""
 
         from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
-        prompt = generate_transition_prompt_v3(
-            transition,
-            self.breed,
-            self.body_type or "",
-            self.color,
+        prompt, negative_prompt = generate_transition_prompt_v3(
+            transition=transition,
+            breed_name=self.breed,
+            species=self.species,
         )
 
         print(f"    提示词: {prompt}")
+        print(f"    负向: {negative_prompt[:50]}...")
         print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
         def do_generate():
@@ -887,6 +1012,7 @@ class KlingPipeline:
             result = self.kling_video.image_to_video(
                 image_path=start_image,
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 duration=5,
                 aspect_ratio="16:9",
                 model_name=self.video_model_name,
@@ -918,8 +1044,265 @@ class KlingPipeline:
 
         return output_path
 
+    def _run_video_tasks_concurrent(
+        self,
+        tasks: List[Dict],
+        task_type: str,
+        max_concurrent: int = 3,
+        base_progress: int = 50,
+        progress_range: int = 20,
+        max_retries: int = 3,
+        retry_delay: int = 30
+    ) -> Dict:
+        """
+        并发执行视频生成任务（可灵API支持并发3）
+        带完善的重试机制
+        
+        Args:
+            tasks: 任务列表，每个任务包含:
+                - transition: 过渡名称 (如 "walk2sit") 或 pose: 姿势名称 (如 "sit")
+                - start_image: 起始图片路径
+            task_type: 任务类型 ("transition" 或 "loop")
+            max_concurrent: 最大并发数（默认3，可灵API限制）
+            base_progress: 基础进度百分比
+            progress_range: 进度范围
+            max_retries: 单个任务最大重试次数（默认3）
+            retry_delay: 重试间隔秒数（默认30秒）
+            
+        Returns:
+            生成的视频路径字典
+        """
+        results = {}
+        failed_tasks = []  # 记录失败的任务用于重试
+        total = len(tasks)
+        completed = 0
+        lock = threading.Lock()
+        
+        if total == 0:
+            return results
+            
+        print(f"\n🚀 并发任务启动: {total} 个任务，最大并发数 {max_concurrent}")
+        print(f"  🔄 重试配置: 最多 {max_retries} 次，间隔 {retry_delay} 秒")
+        
+        def generate_single_task(task_info, attempt=1):
+            """单个任务的执行函数（带重试）"""
+            nonlocal completed
+            
+            if task_type == "transition":
+                name = task_info["transition"]
+                start_image = task_info["start_image"]
+                try:
+                    video_path = self._generate_transition_video_no_wait(name, start_image)
+                    with lock:
+                        completed += 1
+                        progress = base_progress + int((completed / total) * progress_range)
+                        self._update_status(progress, f"并发生成中 ({completed}/{total}): {name} ✅")
+                    return (name, video_path, None, task_info)
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"  ⚠️ {name} 第{attempt}次尝试失败: {error_msg[:50]}...")
+                    return (name, None, error_msg, task_info)
+            else:  # loop
+                name = task_info["pose"]
+                start_image = task_info["start_image"]
+                try:
+                    video_path = self._generate_loop_video_no_wait(name, start_image)
+                    with lock:
+                        completed += 1
+                        progress = base_progress + int((completed / total) * progress_range)
+                        self._update_status(progress, f"并发生成中 ({completed}/{total}): {name}_loop ✅")
+                    return (name, video_path, None, task_info)
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"  ⚠️ {name}_loop 第{attempt}次尝试失败: {error_msg[:50]}...")
+                    return (name, None, error_msg, task_info)
+        
+        def run_batch(batch_tasks, attempt=1):
+            """执行一批任务"""
+            batch_results = {}
+            batch_failed = []
+            
+            with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+                future_to_task = {
+                    executor.submit(generate_single_task, task, attempt): task 
+                    for task in batch_tasks
+                }
+                
+                for future in as_completed(future_to_task):
+                    task = future_to_task[future]
+                    try:
+                        name, video_path, error, task_info = future.result()
+                        if video_path:
+                            batch_results[name] = video_path
+                            print(f"  ✅ {name} 完成")
+                        else:
+                            batch_failed.append(task_info)
+                    except Exception as e:
+                        task_name = task.get("transition") or task.get("pose")
+                        print(f"  ❌ {task_name} 异常: {e}")
+                        batch_failed.append(task)
+            
+            return batch_results, batch_failed
+        
+        # 第一轮执行
+        print(f"\n📦 第1轮执行 ({len(tasks)} 个任务)...")
+        results, failed_tasks = run_batch(tasks, attempt=1)
+        
+        # 重试失败的任务
+        current_attempt = 2
+        while failed_tasks and current_attempt <= max_retries:
+            print(f"\n🔄 第{current_attempt}轮重试 ({len(failed_tasks)} 个失败任务)...")
+            print(f"  ⏳ 等待 {retry_delay} 秒后重试...")
+            time.sleep(retry_delay)
+            
+            # 重试时降低并发数，减少压力
+            retry_concurrent = max(1, max_concurrent - 1)
+            print(f"  📦 重试并发数: {retry_concurrent}")
+            
+            retry_results, still_failed = run_batch(failed_tasks, attempt=current_attempt)
+            results.update(retry_results)
+            failed_tasks = still_failed
+            current_attempt += 1
+        
+        # 最终报告
+        success_count = len(results)
+        fail_count = len(failed_tasks)
+        
+        print(f"\n📊 并发任务完成:")
+        print(f"  ✅ 成功: {success_count}/{total}")
+        if fail_count > 0:
+            print(f"  ❌ 失败: {fail_count}/{total}")
+            for task in failed_tasks:
+                task_name = task.get("transition") or task.get("pose")
+                print(f"     - {task_name}")
+        
+        return results
+
+    def _generate_transition_video_no_wait(self, transition: str, start_image: str) -> str:
+        """生成单个过渡视频（无间隔等待版本，用于并发）"""
+        # 使用v3.0 prompt系统
+        if not getattr(self, "body_type", None):
+            from prompt_config.breed_database import get_breed_config
+            breed_config = get_breed_config(self.breed)
+            if breed_config:
+                self.body_type = breed_config.get("standard_size")
+            else:
+                self.body_type = ""
+
+        from prompt_config.prompt_generator_v3 import generate_transition_prompt_v3
+        prompt, negative_prompt = generate_transition_prompt_v3(
+            transition=transition,
+            breed_name=self.breed,
+            species=self.species,
+        )
+
+        print(f"    [{transition}] 提示词: {prompt[:50]}...")
+        print(f"    [{transition}] 负向: {negative_prompt[:40]}...")
+
+        def do_generate():
+            result = self.kling_video.image_to_video(
+                image_path=start_image,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                duration=5,
+                aspect_ratio="16:9",
+                model_name=self.video_model_name,
+                mode=self.video_model_mode
+            )
+
+            task_id = result['task_id']
+            print(f"    [{transition}] 任务ID: {task_id}")
+
+            task_data = self.kling_video.wait_for_video_task(task_id, max_wait_seconds=600)
+            video_url = self._extract_video_url(task_data)
+
+            output_path = str(self.videos_dir / "transitions" / f"{transition}.mp4")
+            self.kling_video.download_video(video_url, output_path)
+
+            return output_path
+
+        return self._retry_operation(do_generate, f"生成过渡视频 {transition}")
+
+    def _generate_loop_video_no_wait(self, pose: str, pose_image: str) -> str:
+        """生成单个循环视频（无间隔等待版本，用于并发）"""
+        if not getattr(self, "body_type", None):
+            from prompt_config.breed_database import get_breed_config
+            breed_config = get_breed_config(self.breed)
+            if breed_config:
+                self.body_type = breed_config.get("standard_size")
+            else:
+                self.body_type = ""
+
+        from prompt_config.prompt_generator_v3 import generate_loop_prompt_v3
+        prompt, negative_prompt = generate_loop_prompt_v3(
+            pose=pose,
+            breed_name=self.breed,
+            species=self.species,
+        )
+
+        print(f"    [{pose}_loop] 提示词: {prompt[:50]}...")
+        print(f"    [{pose}_loop] 负向: {negative_prompt[:40]}...")
+
+        def do_generate():
+            result = self.kling_video.image_to_video(
+                image_path=pose_image,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                duration=5,
+                aspect_ratio="16:9",
+                model_name=self.video_model_name,
+                mode=self.video_model_mode
+            )
+
+            task_id = result['task_id']
+            print(f"    [{pose}_loop] 任务ID: {task_id}")
+
+            task_data = self.kling_video.wait_for_video_task(task_id, max_wait_seconds=600)
+            video_url = self._extract_video_url(task_data)
+
+            output_path = str(self.videos_dir / "loops" / f"{pose}_loop.mp4")
+            self.kling_video.download_video(video_url, output_path)
+
+            return output_path
+
+        return self._retry_operation(do_generate, f"生成循环视频 {pose}_loop")
+
     def _generate_remaining_transitions(self) -> Dict:
-        """生成剩余9个过渡视频"""
+        """生成剩余9个过渡视频（并发版本，最多3个并发）"""
+        all_transitions = get_all_transitions()
+        remaining = [t for t in all_transitions if t not in FIRST_TRANSITIONS]
+
+        total = len(remaining)
+        print(f"\n📦 并发生成剩余 {total} 个过渡视频（并发数：3）")
+
+        # 准备任务列表
+        tasks = []
+        for transition in remaining:
+            start_pose = transition.split("2")[0]
+            start_image = str(self.images_dir / f"{start_pose}.png")
+            
+            if not os.path.exists(start_image):
+                print(f"  ⚠️  跳过 {transition}：{start_pose}.png 不存在")
+                continue
+            
+            tasks.append({
+                "transition": transition,
+                "start_image": start_image
+            })
+
+        # 并发执行
+        videos = self._run_video_tasks_concurrent(
+            tasks=tasks,
+            task_type="transition",
+            max_concurrent=3,
+            base_progress=55,
+            progress_range=17
+        )
+
+        return videos
+
+    def _generate_remaining_transitions_sequential(self) -> Dict:
+        """生成剩余9个过渡视频（顺序版本，备用）"""
         all_transitions = get_all_transitions()
         remaining = [t for t in all_transitions if t not in FIRST_TRANSITIONS]
 
@@ -947,7 +1330,35 @@ class KlingPipeline:
         return videos
 
     def _generate_loop_videos(self) -> Dict:
-        """生成4个循环视频，带重试机制"""
+        """生成4个循环视频（并发版本，最多3个并发）"""
+        print(f"\n📦 并发生成 {len(POSES)} 个循环视频（并发数：3）")
+
+        # 准备任务列表
+        tasks = []
+        for pose in POSES:
+            pose_image = str(self.images_dir / f"{pose}.png")
+            if not os.path.exists(pose_image):
+                print(f"  ⚠️  跳过 {pose}：{pose}.png 不存在")
+                continue
+            
+            tasks.append({
+                "pose": pose,
+                "start_image": pose_image
+            })
+
+        # 并发执行
+        videos = self._run_video_tasks_concurrent(
+            tasks=tasks,
+            task_type="loop",
+            max_concurrent=3,
+            base_progress=75,
+            progress_range=13
+        )
+
+        return videos
+
+    def _generate_loop_videos_sequential(self) -> Dict:
+        """生成4个循环视频（顺序版本，备用）"""
         videos = {}
         total = len(POSES)
         base_progress = 75  # 步骤6起始进度
@@ -975,21 +1386,22 @@ class KlingPipeline:
                     self.body_type = ""
 
             from prompt_config.prompt_generator_v3 import generate_loop_prompt_v3
-            prompt = generate_loop_prompt_v3(
-                pose,
-                self.breed,
-                self.body_type or "",
-                self.color,
+            prompt, negative_prompt = generate_loop_prompt_v3(
+                pose=pose,
+                breed_name=self.breed,
+                species=self.species,
             )
 
             print(f"    提示词: {prompt}")
+            print(f"    负向: {negative_prompt[:50]}...")
             print(f"    🎬 视频模型: {self.video_model_name} (模式: {self.video_model_mode})")
 
-            def do_generate(p=pose, pi=pose_image, pr=prompt):
+            def do_generate(p=pose, pi=pose_image, pr=prompt, neg=negative_prompt):
                 # 调用可灵AI图生视频（使用视频专用 API）
                 result = self.kling_video.image_to_video(
                     image_path=pi,
                     prompt=pr,
+                    negative_prompt=neg,
                     duration=5,
                     aspect_ratio="16:9",
                     model_name=self.video_model_name,
@@ -1052,42 +1464,48 @@ class KlingPipeline:
 
     def _concatenate_transition_videos(self) -> str:
         """拼接所有过渡视频为一个长视频"""
-        transitions_dir = self.videos_dir / "transitions"
+        try:
+            transitions_dir = self.videos_dir / "transitions"
 
-        if not transitions_dir.exists():
-            print("  ⚠️  过渡视频目录不存在，跳过拼接")
+            if not transitions_dir.exists():
+                print("  ⚠️  过渡视频目录不存在，跳过拼接")
+                return None
+
+            # 获取所有过渡视频
+            video_files = sorted(transitions_dir.glob("*.mp4"))
+
+            if not video_files:
+                print("  ⚠️  没有找到过渡视频，跳过拼接")
+                return None
+
+            # 智能排序：尝试形成连贯的动作序列
+            ordered_videos = self._sort_videos_by_transition(video_files)
+
+            # 生成动态文件名：{species}_{breed}_{model_name}_{timestamp}.mp4
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_name_safe = self.video_model_name.replace('-', '_')
+            filename = f"{self.species}_{self.breed}_{model_name_safe}_{timestamp}.mp4"
+            output_path = str(self.videos_dir / filename)
+            
+            print(f"  📹 准备拼接 {len(ordered_videos)} 个过渡视频...")
+            print(f"  拼接顺序:")
+            for i, video in enumerate(ordered_videos, 1):
+                print(f"    {i}. {Path(video).stem}")
+            
+            # 执行拼接
+            concatenate_videos(
+                [str(v) for v in ordered_videos],
+                output_path,
+                resize_to_first=True
+            )
+            
+            print(f"  ✅ 拼接完成: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            print(f"  ❌ 拼接视频失败: {e}")
+            traceback.print_exc()
             return None
-
-        # 获取所有过渡视频
-        video_files = sorted(transitions_dir.glob("*.mp4"))
-
-        if not video_files:
-            print("  ⚠️  没有找到过渡视频，跳过拼接")
-            return None
-
-        # 智能排序：尝试形成连贯的动作序列
-        ordered_videos = self._sort_videos_by_transition(video_files)
-
-        # 生成动态文件名：{species}_{breed}_{model_name}_{timestamp}.mp4
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name_safe = self.video_model_name.replace('-', '_')
-        filename = f"{self.species}_{self.breed}_{model_name_safe}_{timestamp}.mp4"
-        output_path = str(self.videos_dir / filename)
-        
-        print(f"  📹 准备拼接 {len(ordered_videos)} 个过渡视频...")
-        print(f"  拼接顺序:")
-        for i, video in enumerate(ordered_videos, 1):
-            print(f"    {i}. {Path(video).stem}")
-        
-        # 执行拼接
-        concatenate_videos(
-            [str(v) for v in ordered_videos],
-            output_path,
-            resize_to_first=True
-        )
-        
-        print(f"  ✅ 拼接完成: {output_path}")
-        return output_path
     
     def _sort_videos_by_transition(self, video_files: list) -> list:
         """

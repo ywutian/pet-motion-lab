@@ -42,7 +42,8 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 @router.post("/image-to-image")
 async def image_to_image(
     file: UploadFile = File(...),
-    prompt: str = Form(...)
+    prompt: str = Form(...),
+    negative_prompt: str = Form("")
 ):
     """
     图生图工具 - 上传图片，根据提示词生成新图片
@@ -50,6 +51,7 @@ async def image_to_image(
     Args:
         file: 输入图片
         prompt: 提示词
+        negative_prompt: 负向提示词（可选）
     
     Returns:
         生成的图片文件
@@ -64,6 +66,8 @@ async def image_to_image(
         print(f"🎨 图生图任务开始")
         print(f"  输入图片: {upload_path}")
         print(f"  提示词: {prompt}")
+        if negative_prompt:
+            print(f"  负向提示词: {negative_prompt}")
         
         # 调用可灵AI
         kling = KlingAPI(ACCESS_KEY, SECRET_KEY)
@@ -72,6 +76,7 @@ async def image_to_image(
         result = kling.image_to_image(
             image_path=str(upload_path),
             prompt=prompt,
+            negative_prompt=negative_prompt,
             aspect_ratio="1:1",
             image_count=1
         )
@@ -118,7 +123,8 @@ async def image_to_image(
 @router.post("/image-to-video")
 async def image_to_video(
     file: UploadFile = File(...),
-    prompt: str = Form(...)
+    prompt: str = Form(...),
+    negative_prompt: str = Form("")
 ):
     """
     图生视频工具 - 上传图片，根据提示词生成视频
@@ -126,6 +132,7 @@ async def image_to_video(
     Args:
         file: 输入图片
         prompt: 提示词
+        negative_prompt: 负向提示词（可选）
     
     Returns:
         生成的视频文件
@@ -140,6 +147,8 @@ async def image_to_video(
         print(f"🎬 图生视频任务开始")
         print(f"  输入图片: {upload_path}")
         print(f"  提示词: {prompt}")
+        if negative_prompt:
+            print(f"  负向提示词: {negative_prompt}")
         
         # 调用可灵AI（使用视频专用 API 密钥）
         kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
@@ -148,6 +157,7 @@ async def image_to_video(
         result = kling.image_to_video(
             image_path=str(upload_path),
             prompt=prompt,
+            negative_prompt=negative_prompt,
             duration=5,
             aspect_ratio="16:9",
             model_name="kling-v2-1"

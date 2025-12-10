@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional
 import os
 import shutil
+import json
 from pathlib import Path
 import time
 import tempfile
@@ -60,6 +61,90 @@ _submit_lock = threading.Lock()
 _recent_submissions = {}  # {hash: timestamp} 用于防止短时间内重复提交
 DUPLICATE_THRESHOLD_SECONDS = 30  # 30秒内相同请求视为重复
 
+# ============================================
+# 全局并发控制（防止多用户同时请求）
+# ============================================
+_global_task_lock = threading.Lock()
+_active_tasks = {}  # {pet_id: {"status": "running", "started_at": timestamp, "user_info": ...}}
+_task_queue = []  # 等待队列
+
+# 并发限制配置
+MAX_CONCURRENT_TASKS = 1  # 最大同时运行的任务数（可灵API并发限制为3，保守设为1）
+MAX_QUEUE_SIZE = 10  # 最大排队数量
+TASK_TIMEOUT_SECONDS = 3600  # 任务超时时间（1小时）
+
+def _check_and_acquire_slot(pet_id: str, user_info: str = "") -> tuple:
+    """
+    检查并获取任务执行槽位
+    
+    Returns:
+        (success: bool, message: str, queue_position: int)
+        - success=True: 获取到执行槽位，可以立即执行
+        - success=False: 未获取到槽位，返回原因
+        - queue_position: 如果在队列中，返回位置；否则为0
+    """
+    with _global_task_lock:
+        current_time = time.time()
+        
+        # 清理超时的任务
+        expired_tasks = [
+            pid for pid, info in _active_tasks.items()
+            if current_time - info.get("started_at", 0) > TASK_TIMEOUT_SECONDS
+        ]
+        for pid in expired_tasks:
+            print(f"⚠️ 清理超时任务: {pid}")
+            del _active_tasks[pid]
+        
+        # 检查当前运行的任务数
+        running_count = len(_active_tasks)
+        
+        if running_count < MAX_CONCURRENT_TASKS:
+            # 有空闲槽位，直接获取
+            _active_tasks[pet_id] = {
+                "status": "running",
+                "started_at": current_time,
+                "user_info": user_info
+            }
+            print(f"✅ 任务 {pet_id} 获取执行槽位 (当前运行: {running_count + 1}/{MAX_CONCURRENT_TASKS})")
+            return True, "获取到执行槽位", 0
+        else:
+            # 没有空闲槽位
+            if len(_task_queue) >= MAX_QUEUE_SIZE:
+                return False, f"系统繁忙，队列已满（{MAX_QUEUE_SIZE}个任务等待中）。请稍后再试。", -1
+            
+            # 检查是否已在队列中
+            if pet_id not in _task_queue:
+                _task_queue.append(pet_id)
+            
+            queue_position = _task_queue.index(pet_id) + 1
+            return False, f"系统繁忙，您的任务已加入队列，当前排队位置: {queue_position}", queue_position
+
+
+def _release_slot(pet_id: str):
+    """释放任务执行槽位"""
+    with _global_task_lock:
+        if pet_id in _active_tasks:
+            del _active_tasks[pet_id]
+            print(f"🔓 任务 {pet_id} 释放执行槽位")
+        
+        # 从队列中移除（如果存在）
+        if pet_id in _task_queue:
+            _task_queue.remove(pet_id)
+
+
+def _get_system_status() -> dict:
+    """获取系统状态"""
+    with _global_task_lock:
+        return {
+            "running_tasks": len(_active_tasks),
+            "max_concurrent": MAX_CONCURRENT_TASKS,
+            "queue_length": len(_task_queue),
+            "max_queue": MAX_QUEUE_SIZE,
+            "active_task_ids": list(_active_tasks.keys()),
+            "queued_task_ids": list(_task_queue)
+        }
+
+
 # 输出目录
 OUTPUT_DIR = Path("output/kling_pipeline")
 
@@ -72,7 +157,9 @@ OUTPUT_DIR = Path("output/kling_pipeline")
 async def get_generation_history(
     page: int = 1,
     page_size: int = 10,
-    status_filter: str = ""
+    status_filter: str = "",
+    model_filter: str = "",
+    group_mode: str = ""
 ):
     """
     获取生成历史记录列表（所有用户共享）
@@ -81,12 +168,15 @@ async def get_generation_history(
         page: 页码（从1开始）
         page_size: 每页数量
         status_filter: 状态过滤 (completed/failed/processing/空=全部)
+        model_filter: 视频模型过滤 (kling-v2-5-turbo/kling-v2-1/kling-v1-6/kling-v1-5/空=全部)
+        group_mode: 分组模式 (model=按模型分组/comparison=多模型对比分组/空=不分组)
 
     Returns:
         历史记录列表，包含预览图和基本信息
     """
-    # 从数据库获取任务列表
-    db_tasks, total = db.get_all_tasks(status_filter, page, page_size)
+    # 从数据库获取任务列表（暂时获取更多，后面会进行过滤）
+    fetch_page_size = page_size * 3 if model_filter or group_mode else page_size
+    db_tasks, total = db.get_all_tasks(status_filter, 1, fetch_page_size * page)
 
     history_list = []
 
@@ -101,7 +191,13 @@ async def get_generation_history(
         # 检查文件存在性
         has_transparent = (pet_dir / "transparent.png").exists()
         has_sit = (pet_dir / "base_images" / "sit.png").exists()
-        has_concat_video = (pet_dir / "videos" / "all_transitions_concatenated.mp4").exists()
+        # 拼接视频：查找 videos/ 目录下非 transitions/loops 子目录的 .mp4 文件
+        concat_video_path = None
+        if (pet_dir / "videos").exists():
+            for f in (pet_dir / "videos").glob("*.mp4"):
+                concat_video_path = f
+                break
+        has_concat_video = concat_video_path is not None
         has_gifs = (pet_dir / "gifs").exists() and any((pet_dir / "gifs").rglob("*.gif"))
 
         # 统计文件数量
@@ -110,6 +206,32 @@ async def get_generation_history(
 
         # 获取创建时间（优先使用数据库中的时间）
         created_at = task.get('created_at', pet_dir.stat().st_mtime)
+
+        # 读取元数据获取视频模型和AI检测信息
+        metadata_path = pet_dir / "metadata.json"
+        metadata = {}
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+            except:
+                pass
+
+        # 获取视频模型名称
+        video_model_name = metadata.get("video_model_name", "")
+        
+        # 按视频模型过滤
+        if model_filter and video_model_name != model_filter:
+            continue
+        
+        # 检测是否属于多模型对比任务
+        is_multi_model = pet_id.startswith("multi_")
+        multi_model_base_id = ""
+        if is_multi_model:
+            # 解析 base_id: multi_1234567890_kling_v2_5_turbo -> multi_1234567890
+            parts = pet_id.split("_")
+            if len(parts) >= 2:
+                multi_model_base_id = f"{parts[0]}_{parts[1]}"
 
         history_item = {
             "pet_id": pet_id,
@@ -121,6 +243,17 @@ async def get_generation_history(
             "message": task.get("message", ""),
             "created_at": created_at,
             "created_at_formatted": time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at)),
+
+            # 视频模型信息（显眼标记）
+            "video_model_name": video_model_name,
+            "video_model_mode": metadata.get("video_model_mode", ""),
+            
+            # 多模型对比标记
+            "is_multi_model": is_multi_model,
+            "multi_model_base_id": multi_model_base_id,
+            
+            # 共享坐姿图路径（多模型对比时使用）
+            "shared_sit_image": metadata.get("shared_sit_image", ""),
 
             # 预览图
             "preview": {
@@ -137,10 +270,13 @@ async def get_generation_history(
 
             # 快捷链接
             "quick_links": {
-                "concatenated_video": f"/api/kling/download/{pet_id}/videos/all_transitions_concatenated.mp4" if has_concat_video else None,
+                "concatenated_video": f"/api/kling/download/{pet_id}/videos/{concat_video_path.name}" if concat_video_path else None,
                 "download_all": f"/api/kling/download-all/{pet_id}",
                 "download_zip_gifs": f"/api/kling/download-zip/{pet_id}?include=gifs" if has_gifs else None,
-            }
+            },
+
+            # AI 检测简要信息（用于列表显示）
+            "ai_check_summary": _get_ai_check_summary(metadata.get("ai_check_result")),
         }
 
         history_list.append(history_item)
@@ -176,12 +312,80 @@ async def get_generation_history(
             )
             db.update_task(pet_id, status='completed', progress=100)
 
+    # 处理分组模式
+    result_items = history_list
+    grouped_comparisons = []
+    
+    if group_mode == "comparison":
+        # 多模型对比分组：将相同 base_id 的任务合并
+        comparison_groups = {}
+        non_multi_items = []
+        
+        for item in history_list:
+            if item.get("is_multi_model") and item.get("multi_model_base_id"):
+                base_id = item["multi_model_base_id"]
+                if base_id not in comparison_groups:
+                    comparison_groups[base_id] = {
+                        "base_id": base_id,
+                        "breed": item["breed"],
+                        "color": item["color"],
+                        "species": item["species"],
+                        "created_at": item["created_at"],
+                        "created_at_formatted": item["created_at_formatted"],
+                        "models": [],
+                        "preview": item["preview"],  # 共享的预览图
+                    }
+                comparison_groups[base_id]["models"].append({
+                    "pet_id": item["pet_id"],
+                    "video_model_name": item["video_model_name"],
+                    "video_model_mode": item["video_model_mode"],
+                    "status": item["status"],
+                    "progress": item["progress"],
+                    "message": item["message"],
+                    "stats": item["stats"],
+                    "quick_links": item["quick_links"],
+                })
+            else:
+                non_multi_items.append(item)
+        
+        grouped_comparisons = list(comparison_groups.values())
+        # 按创建时间排序
+        grouped_comparisons.sort(key=lambda x: x["created_at"], reverse=True)
+        result_items = non_multi_items
+    
+    elif group_mode == "model":
+        # 按视频模型分组
+        model_groups = {}
+        for item in history_list:
+            model_name = item.get("video_model_name") or "未知模型"
+            if model_name not in model_groups:
+                model_groups[model_name] = []
+            model_groups[model_name].append(item)
+        
+        return JSONResponse({
+            "total": len(history_list),
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 1,
+            "group_mode": "model",
+            "model_groups": model_groups,
+            "available_models": _get_unique_model_names(history_list),
+        })
+    
+    # 应用分页
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_items = result_items[start_idx:end_idx] if not model_filter and not group_mode else result_items[:page_size]
+    actual_total = len(result_items) if model_filter or group_mode else total
+
     return JSONResponse({
-        "total": total,
+        "total": actual_total,
         "page": page,
         "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size,
-        "items": history_list
+        "total_pages": (actual_total + page_size - 1) // page_size,
+        "items": paginated_items,
+        "grouped_comparisons": grouped_comparisons if group_mode == "comparison" else [],
+        "available_models": _get_unique_model_names(history_list),
     })
 
 
@@ -267,15 +471,17 @@ async def get_history_detail(pet_id: str):
                 "size": video.stat().st_size,
             })
 
-    # 拼接视频
-    concat_video = pet_dir / "videos" / "all_transitions_concatenated.mp4"
-    if concat_video.exists():
-        files["concatenated_video"] = {
-            "name": "all_transitions_concatenated",
-            "filename": "all_transitions_concatenated.mp4",
-            "url": f"/api/kling/download/{pet_id}/videos/all_transitions_concatenated.mp4",
-            "size": concat_video.stat().st_size,
-        }
+    # 拼接视频：查找 videos/ 目录下的拼接视频（非 transitions/loops 子目录的 .mp4）
+    videos_dir = pet_dir / "videos"
+    if videos_dir.exists():
+        for concat_video in videos_dir.glob("*.mp4"):
+            files["concatenated_video"] = {
+                "name": concat_video.stem,
+                "filename": concat_video.name,
+                "url": f"/api/kling/download/{pet_id}/videos/{concat_video.name}",
+                "size": concat_video.stat().st_size,
+            }
+            break  # 只取第一个
 
     # 过渡GIF
     trans_gifs_dir = pet_dir / "gifs" / "transitions"
@@ -315,6 +521,10 @@ async def get_history_detail(pet_id: str):
         "created_at": pet_dir.stat().st_mtime,
         "created_at_formatted": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(pet_dir.stat().st_mtime)),
 
+        # ===== 视频模型信息（显眼位置）=====
+        "video_model_name": metadata.get("video_model_name", ""),
+        "video_model_mode": metadata.get("video_model_mode", ""),
+
         "files": files,
 
         "summary": {
@@ -335,6 +545,10 @@ async def get_history_detail(pet_id: str):
             "zip_all": f"/api/kling/download-zip/{pet_id}?include=all",
         },
 
+        # ===== AI 检测报告（完整版）=====
+        "ai_check_result": metadata.get("ai_check_result"),
+        "validation_warnings": metadata.get("validation_warnings", []),
+
         "metadata": metadata,
     })
 
@@ -349,6 +563,56 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     else:
         return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+def _get_unique_model_names(history_list: list) -> list:
+    """
+    从历史记录中提取所有使用过的唯一视频模型名称
+    
+    Args:
+        history_list: 历史记录列表
+        
+    Returns:
+        唯一的模型名称列表
+    """
+    model_names = set()
+    for item in history_list:
+        model_name = item.get("video_model_name", "")
+        if model_name:
+            model_names.add(model_name)
+    
+    # 返回排序后的列表
+    return sorted(list(model_names))
+
+
+def _get_ai_check_summary(ai_check_result: dict) -> dict:
+    """
+    从 AI 检测结果中提取摘要信息（用于列表显示）
+    
+    Args:
+        ai_check_result: AI 检测的完整结果
+        
+    Returns:
+        摘要信息字典
+    """
+    if not ai_check_result:
+        return None
+    
+    try:
+        overall = ai_check_result.get("overall_assessment", {})
+        pet = ai_check_result.get("pet_detection", {})
+        pose = ai_check_result.get("pose_analysis", {})
+        
+        return {
+            "suitable": overall.get("suitable_for_generation", False),
+            "confidence": overall.get("confidence_score", 0),
+            "severity": overall.get("severity_level", "unknown"),
+            "species": pet.get("species", "unknown"),
+            "posture": pose.get("posture", "unknown"),
+            "summary": overall.get("summary", ""),
+        }
+    except:
+        return None
 
 
 @router.delete("/history/{pet_id}")
@@ -425,10 +689,52 @@ async def init_pet_task(
     # 生成任务ID
     pet_id = f"pet_{int(time.time())}"
 
-    # 保存上传的文件
+    # 保��上传的文件
     upload_path = UPLOAD_DIR / f"{pet_id}_{file.filename}"
     with open(upload_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    # ====== 图片预处理验证 ======
+    from backend.utils.image_validator import validate_image
+    from backend.config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
+
+    print(f"🔍 开始验证图片: {upload_path}")
+
+    # 执行图片验证（包括基础验证和可选的AI检查）
+    validation_result = validate_image(
+        file_path=str(upload_path),
+        strict_mode=False,  # 不使用严格模式
+        enable_ai_check=ENABLE_AI_IMAGE_CHECK,
+        google_api_key=GOOGLE_API_KEY if ENABLE_AI_IMAGE_CHECK else None
+    )
+
+    # 处理验证结果
+    if not validation_result['valid']:
+        # 验证失败（严重错误），拒绝请求
+        error_messages = [err['message'] for err in validation_result['errors']]
+        error_detail = "; ".join(error_messages)
+
+        # 删除上传的文件
+        upload_path.unlink(missing_ok=True)
+
+        print(f"❌ 图片验证失败: {error_detail}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "图片验证失败",
+                "messages": error_messages,
+                "severity": validation_result.get('severity_level', 'error'),
+                "details": validation_result
+            }
+        )
+
+    # 检查是否有警告（可以继续处理，但给用户提示）
+    warnings = validation_result.get('warnings', [])
+    if warnings:
+        warning_messages = [warn['message'] for warn in warnings]
+        print(f"⚠️ 图片验证警告: {'; '.join(warning_messages)}")
+
+    print(f"✅ 图片验证通过 (严重程度: {validation_result.get('severity_level', 'pass')})")
 
     # 初始化任务状态（同时保存到内存和数据库）
     task_status[pet_id] = {
@@ -442,6 +748,8 @@ async def init_pet_task(
         "weight": weight,
         "birthday": birthday,
         "current_step": 0,
+        "validation_result": validation_result,  # 保存验证结果
+        "validation_warnings": [w['message'] for w in warnings] if warnings else [],
         "results": {
             "step1_background_removed": None,
             "step2_base_image": None,
@@ -718,6 +1026,11 @@ def run_pipeline_in_background(
         task_status[pet_id]["results"] = results
 
         # 保存元数据到文件（用于历史记录）
+        # 获取 AI 检测报告（如果有的话）
+        validation_result = task_status[pet_id].get("validation_result", {})
+        ai_analysis = validation_result.get("metrics", {}).get("ai_analysis", {})
+        ai_check_result = ai_analysis.get("ai_result") if ai_analysis else None
+        
         _save_metadata(pet_id, {
             "breed": breed,
             "color": color,
@@ -729,6 +1042,9 @@ def run_pipeline_in_background(
             "created_at": task_status[pet_id].get("started_at", time.time()),
             "completed_at": time.time(),
             "status": "completed",
+            # AI 检测报告
+            "ai_check_result": ai_check_result,
+            "validation_warnings": task_status[pet_id].get("validation_warnings", []),
         })
 
         # 同步到数据库（持久化，所有用户可见）
@@ -757,6 +1073,32 @@ def run_pipeline_in_background(
         # 同步到数据库
         db.update_task(pet_id, status='failed',
                        message=f'❌ 生成失败: {error_msg}')
+
+    finally:
+        # ========== 释放执行槽位 ==========
+        _release_slot(pet_id)
+        print(f"🔓 任务 {pet_id} 已释放执行槽位，系统状态: {_get_system_status()}")
+
+
+@router.get("/system-status")
+async def get_system_status():
+    """
+    获取系统状态（并发控制信息）
+    
+    Returns:
+        系统当前状态，包括：
+        - running_tasks: 当前运行的任务数
+        - max_concurrent: 最大并发数
+        - queue_length: 排队中的任务数
+        - max_queue: 最大排队数
+        - active_task_ids: 正在运行的任务ID列表
+        - queued_task_ids: 排队中的任务ID列表
+    """
+    status = _get_system_status()
+    status["available_slots"] = status["max_concurrent"] - status["running_tasks"]
+    status["can_accept_new_task"] = status["running_tasks"] < status["max_concurrent"]
+    
+    return JSONResponse(status)
 
 
 @router.post("/generate")
@@ -816,10 +1158,80 @@ async def generate_pet_animations(
     # 生成任务ID
     pet_id = f"pet_{int(time.time())}"
 
+    # ========== 并发控制检查 ==========
+    can_run, message, queue_pos = _check_and_acquire_slot(pet_id, user_info=f"{breed}_{species}")
+    
+    if not can_run:
+        if queue_pos == -1:
+            # 队列已满，直接拒绝
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "系统繁忙",
+                    "message": message,
+                    "system_status": _get_system_status()
+                }
+            )
+        else:
+            # 返回排队信息（但不阻塞，让用户知道需要等待）
+            # 实际上我们这里选择拒绝，让用户稍后再试
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "系统繁忙",
+                    "message": message,
+                    "queue_position": queue_pos,
+                    "system_status": _get_system_status(),
+                    "suggestion": "请等待当前任务完成后再提交，或稍后再试"
+                }
+            )
+
     # 保存上传的文件
     upload_path = UPLOAD_DIR / f"{pet_id}_{file.filename}"
     with open(upload_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    # ====== 图片预处理验证 ======
+    from backend.utils.image_validator import validate_image
+    from backend.config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
+
+    print(f"🔍 开始验证图片: {upload_path}")
+
+    # 执行图片验证（包括基础验证和可选的AI检查）
+    validation_result = validate_image(
+        file_path=str(upload_path),
+        strict_mode=False,  # 不使用严格模式
+        enable_ai_check=ENABLE_AI_IMAGE_CHECK,
+        google_api_key=GOOGLE_API_KEY if ENABLE_AI_IMAGE_CHECK else None
+    )
+
+    # 处理验证结果
+    if not validation_result['valid']:
+        # 验证失败（严重错误），拒绝请求
+        error_messages = [err['message'] for err in validation_result['errors']]
+        error_detail = "; ".join(error_messages)
+
+        # 删除上传的文件
+        upload_path.unlink(missing_ok=True)
+
+        print(f"❌ 图片验证失败: {error_detail}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "图片验证失败",
+                "messages": error_messages,
+                "severity": validation_result.get('severity_level', 'error'),
+                "details": validation_result
+            }
+        )
+
+    # 检查是否有警告（可以继续处理，但给用户提示）
+    warnings = validation_result.get('warnings', [])
+    if warnings:
+        warning_messages = [warn['message'] for warn in warnings]
+        print(f"⚠️ 图片验证警告: {'; '.join(warning_messages)}")
+
+    print(f"✅ 图片验证通过 (严重程度: {validation_result.get('severity_level', 'pass')})")
 
     # 初始化任务状态（同时保存到内存和数据库）
     task_status[pet_id] = {
@@ -836,7 +1248,9 @@ async def generate_pet_animations(
         "video_model_mode": video_model_mode,
         "results": None,
         "error": None,
-        "started_at": time.time()
+        "started_at": time.time(),
+        "validation_result": validation_result,  # 保存验证结果
+        "validation_warnings": [w['message'] for w in warnings] if warnings else []
     }
 
     # 持久化到数据库
@@ -1440,11 +1854,14 @@ async def get_all_download_links(pet_id: str, base_url: str = ""):
                 download_links["quick_download"]["all_gifs"].append(gif_info)
 
     # ========== 拼接视频 ==========
-    if steps.get("concatenated_video"):
+    concat_video_path = steps.get("concatenated_video")
+    if concat_video_path:
+        from pathlib import Path
+        concat_filename = Path(concat_video_path).name
         download_links["concatenated_video"] = {
-            "name": "all_transitions",
-            "filename": "all_transitions_concatenated.mp4",
-            "url": f"{api_prefix}/videos/all_transitions_concatenated.mp4"
+            "name": Path(concat_video_path).stem,
+            "filename": concat_filename,
+            "url": f"{api_prefix}/videos/{concat_filename}"
         }
         download_links["quick_download"]["main_video"] = download_links["concatenated_video"]
 

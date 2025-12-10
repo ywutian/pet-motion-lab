@@ -164,15 +164,26 @@ class KlingGenerationService {
   }
 
   /// 获取历史记录列表
+  /// 
+  /// [modelFilter]: 按视频模型筛选 (kling-v2-5-turbo/kling-v2-1/kling-v1-6/kling-v1-5/空=全部)
+  /// [groupMode]: 分组模式 (model=按模型分组/comparison=多模型对比分组/空=不分组)
   Future<Map<String, dynamic>> getHistory({
     int page = 1,
     int pageSize = 10,
     String statusFilter = '',
+    String modelFilter = '',
+    String groupMode = '',
   }) async {
     try {
       var queryParams = '?page=$page&page_size=$pageSize';
       if (statusFilter.isNotEmpty) {
         queryParams += '&status_filter=$statusFilter';
+      }
+      if (modelFilter.isNotEmpty) {
+        queryParams += '&model_filter=$modelFilter';
+      }
+      if (groupMode.isNotEmpty) {
+        queryParams += '&group_mode=$groupMode';
       }
 
       final uri = Uri.parse('$baseUrl/api/kling/history$queryParams');

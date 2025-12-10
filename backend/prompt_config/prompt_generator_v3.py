@@ -1,301 +1,241 @@
 #!/usr/bin/env python3
 """
-Pet Motion Lab v3.0 - Prompt生成器
-基于新的三行格式生成prompt
+Pet Motion Lab v3.0 - Prompt生成器（优化版）
+- 保持原图指令
+- 强化风格约束
+- 使用negative_prompt放置禁止行为
 """
 
-from .breed_database import get_breed_config, get_style_type
-from .intelligent_analyzer import analyze_pet_info
+from typing import Optional, Dict, Tuple
 
+
+# ============ 风格约束模板 ============
+
+DOG_STYLE = "3D卡通动画风格，色彩鲜艳明亮，卡通化柔和阴影"
+CAT_DISNEY_STYLE = "迪士尼3D动画风格，温暖明亮色调，柔和艺术化光影"
+CAT_REALISTIC_STYLE = "写实渲染风格，自然光影细腻层次"
+
+
+# ============ 负向提示词（禁止行为）============
+
+# 通用负向提示词
+NEGATIVE_COMMON = "写实照片感，摄影质感，模糊，噪点，变形，多余肢体"
+
+# 行走相关负向提示词
+NEGATIVE_WALK = "跳跃，小跑，奔跑，四脚同时离地，飞起来，漂浮"
+
+# 姿势相关负向提示词
+NEGATIVE_POSE = "站立，行走，奔跑"  # 用于sit/rest/sleep时
+
+
+# ============ 动作描述模板（正向，简洁）============
+
+POSE_ACTIONS = {
+    "sit": "坐姿，抬头四处张望",
+    "walk": "四脚着地自然行走，前后脚交替移动",
+    "rest": "趴卧，肚子贴地，头抬起，眼睛睁开",
+    "sleep": "趴着睡觉，头放下，闭眼，打呼噜，鼻子有气体呼入呼出"
+}
+
+TRANSITION_ACTIONS = {
+    "sit2walk": "从坐姿站起，然后自然行走，前后脚交替移动",
+    "sit2rest": "从坐姿向前趴下，肚子贴地，头抬起眼睛睁开",
+    "sit2sleep": "从坐姿趴下，头放下，闭眼打呼噜",
+    
+    "rest2sleep": "保持趴卧，头慢慢放下，闭眼打呼噜",
+    "rest2sit": "从趴卧撑起身体，后腿弯曲坐下",
+    "rest2walk": "从趴卧站起，然后自然行走，前后脚交替移动",
+    
+    "walk2sit": "行走减速停下，后腿弯曲坐下",
+    "walk2rest": "行走减速停下，向前趴下，头抬起",
+    "walk2sleep": "行走减速停下，趴下，闭眼打呼噜",
+    
+    "sleep2sit": "睁眼，撑起身体，后腿弯曲坐下",
+    "sleep2rest": "睁眼，头抬起，保持趴卧",
+    "sleep2walk": "睁眼，站起，然后自然行走，前后脚交替移动",
+}
+
+
+# ============ 猫的风格映射 ============
+
+CAT_STYLE_MAP = {
+    # 迪士尼写实风格
+    "橘猫": "disney", "美短": "disney", "美国短毛猫": "disney",
+    "三花猫": "disney", "田园猫": "disney", "中华田园猫": "disney", "狸花猫": "disney",
+    # 纯写实风格
+    "英短": "realistic", "英国短毛猫": "realistic",
+    "布偶猫": "realistic", "布偶": "realistic",
+    "波斯猫": "realistic", "暹罗猫": "realistic", "缅因猫": "realistic",
+    "加菲猫": "realistic", "蓝猫": "realistic",
+}
+
+
+def _get_style(breed_name: str, species: str) -> str:
+    """根据品种获取风格描述"""
+    if species in ("dog", "狗"):
+        return DOG_STYLE
+    else:
+        style_type = CAT_STYLE_MAP.get(breed_name, "disney")
+        return CAT_REALISTIC_STYLE if style_type == "realistic" else CAT_DISNEY_STYLE
+
+
+def _get_species_name(species: str) -> str:
+    """获取物种名称"""
+    return "犬" if species in ("dog", "狗") else "猫"
+
+
+def _get_negative_prompt(action_type: str) -> str:
+    """
+    根据动作类型获取负向提示词
+    
+    Args:
+        action_type: "sit", "walk", "rest", "sleep", 或过渡动作如"sit2walk"
+    """
+    negatives = [NEGATIVE_COMMON]
+    
+    # 涉及行走的动作，添加行走约束
+    if "walk" in action_type:
+        negatives.append(NEGATIVE_WALK)
+    
+    # 静态姿势（非行走），添加姿势约束
+    if action_type in ("sit", "rest", "sleep"):
+        negatives.append(NEGATIVE_POSE)
+    
+    return "，".join(negatives)
+
+
+# ============ Prompt生成函数 ============
 
 def generate_sit_prompt_v3(
     breed_name: str,
-    weight: float,
-    gender: str,
-    birthday: str,
-    color: str,
-    precise_pattern: bool = False
-) -> str:
+    weight: float = 0,
+    gender: str = "",
+    birthday: str = "",
+    color: str = "",
+    precise_pattern: bool = False,
+    ai_features: Optional[Dict] = None,
+    species: str = "dog"
+) -> Tuple[str, str]:
     """
-    生成sit坐姿的prompt (v3.0三行格式)
-
-    Args:
-        breed_name: 品种名（如：西高地白梗、金毛、橘猫）
-        weight: 体重(kg)
-        gender: 性别（公/母）
-        birthday: 生日 "YYYY-MM-DD"
-        color: 颜色描述（如：纯白色、金黄色、橘色）
-        precise_pattern: 是否使用精确条纹版本（仅橘猫）
-
+    生成sit坐姿的prompt
+    
     Returns:
-        三行格式的prompt
+        (prompt, negative_prompt) 元组
     """
-    # 获取品种配置（即使没有体重/生日也能工作）
-    breed_config = get_breed_config(breed_name)
-
-    # 默认物种和体型
-    if breed_config:
-        species_type = breed_config["species_type"]
-        default_body_type = breed_config.get(
-            "standard_size",
-            "中型犬体型" if species_type == "狗" else "中型猫体型",
-        )
-    else:
-        # 未配置的品种，做一个通用兜底
-        species_type = "狗"
-        default_body_type = "中型犬体型"
-
-    body_type = default_body_type
-    analysis = None
-
-    # 如果提供了完整的体重和生日，尝试进行智能分析
-    if weight and weight > 0 and birthday:
-        try:
-            analysis = analyze_pet_info(breed_name, weight, birthday)
-        except Exception:
-            analysis = None
-
-    if analysis and "error" not in analysis:
-        breed_config = analysis.get("breed_config", breed_config)
-        body_type = analysis.get("body_type", default_body_type)
-        species_type = analysis.get("species_type", species_type)
-
-    # 如果仍然没有breed_config（完全未知品种），使用极简三行prompt兜底
-    if not breed_config:
-        species_name = "犬" if species_type == "狗" else "猫"
-        line1 = f"保持原图{breed_name}的{body_type}和外观特征：{color}毛发。"
-        line2 = "3D卡通动画风格，色彩明亮柔和，避免写实照片感和过强噪点。"
-        line3 = f"背景纯白色(#FFFFFF)，坐在地上抬头四处张望，镜头正对{species_name}的正前方。"
-        return f"{line1}\n{line2}\n{line3}"
-
-    # 确定物种名称
-    species_name = "犬" if species_type == "狗" else "猫"
-
-    # 生成第1行
-    line1 = _generate_line1(breed_name, body_type, color, breed_config, precise_pattern)
-
-    # 生成第2行
-    line2 = _generate_line2(breed_config, species_type)
-
-    # 生成第3行
-    line3 = f"背景纯白色(#FFFFFF)，坐在地上抬头四处张望，镜头正对{species_name}的正前方。"
-
-    # 组合三行
-    prompt = f"{line1}\n{line2}\n{line3}"
-
-    return prompt
-
-
-def _generate_line1(breed_name: str, body_type: str, color: str, breed_config: dict, precise_pattern: bool = False) -> str:
-    """生成第1行：保持原图特征"""
-    fur_feature = breed_config["fur_feature"]
-    ear_shape = breed_config["ear_shape"]
-
-    # 基础特征
-    features = [color, fur_feature, ear_shape]
-
-    # 添加特殊标记（如果有）
-    if "special_markers" in breed_config:
-        # 橘猫特殊处理
-        if breed_name == "橘猫" and precise_pattern:
-            features = ["橘色底色、原图虎斑条纹的精确图案", fur_feature, ear_shape, "白色胸毛和白爪"]
-        else:
-            features.extend(breed_config["special_markers"])
-    elif "special_feature" in breed_config:
-        special = breed_config["special_feature"]
-        # 橘猫特殊处理
-        if breed_name == "橘猫":
-            if precise_pattern:
-                features[0] = "橘色底色、原图虎斑条纹的精确图案"
-            else:
-                features[0] = f"{color}虎斑"
-        elif special:
-            features.insert(0, special) if "重点色" in special else features.append(special)
-
-    features_str = "、".join(features)
-
-    # 构建第1行
-    if precise_pattern and breed_name == "橘猫":
-        line1 = f"保持原图{breed_name}的{body_type}和完整外观：{features_str}。"
-    else:
-        line1 = f"保持原图{breed_name}的{body_type}和外观特征：{features_str}。"
-
-    return line1
-
-
-def _generate_line2(breed_config: dict, species_type: str) -> str:
-    """生成第2行：风格描述"""
-    fur_style = breed_config["fur_style"]
-
-    if species_type == "狗":
-        # 狗 - 卡通风格
-        exclude = breed_config["exclude"]
-        line2 = (
-            f"3D卡通动画风格，参考《疯狂动物城》《爱宠大机密》的宠物角色，"
-            f"{fur_style}，色彩鲜艳明亮，卡通化柔和阴影，{exclude}。"
-        )
-    else:
-        # 猫 - 根据style_type选择
-        style_type = breed_config.get("style_type", "realistic")
-
-        if style_type == "disney_realistic":
-            # 迪士尼写实风格
-            line2 = (
-                f"迪士尼3D动画风格，{fur_style}，"
-                f"温暖明亮色调，柔和艺术化光影，避免过度卡通平涂和真实照片质感。"
-            )
-        else:
-            # 纯写实风格
-            line2 = f"写实渲染，{fur_style}，自然光影细腻层次。"
-
-    return line2
-
-
-def generate_loop_prompt_v3(
-    pose: str,
-    breed_name: str,
-    body_type: str,
-    color: str
-) -> str:
-    """
-    生成循环视频的prompt (v3.0单行格式)
-
-    Args:
-        pose: 姿势名称 (如 "sit", "walk", "rest", "sleep")
-        breed_name: 品种名
-        body_type: 体型 [未使用]
-        color: 颜色 [未使用]
-
-    Returns:
-        循环视频prompt
-    """
-    breed_config = get_breed_config(breed_name)
-
-    if not breed_config:
-        return f"错误: 未找到品种配置 {breed_name}"
-
-    species_type = breed_config.get("species_type", "狗")
-    species_name = "犬" if species_type == "狗" else "猫"
-
-    # 姿势动作描述 - 参考截图格式
-    pose_actions = {
-        "sit": "坐在地上四处张望",
-        "walk": f"慢速行走，不要小跑，前后脚交替移动，不要双脚同时离地，镜头始终正对{species_name}的正前方，跟随移动保持距离不变",
-        "rest": "趴在地上四处张望",
-        "sleep": "在睡觉，打呼噜，有气体呼入呼出"
-    }
-
-    action = pose_actions.get(pose, "保持姿势")
-
-    # Walk动作的镜头描述已经包含在action中，不需要重复
-    if pose == "walk":
-        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}。"
-    else:
-        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}，镜头面对{species_name}的正前方。"
-
-    return prompt
+    style = _get_style(breed_name, species)
+    species_name = _get_species_name(species)
+    action = POSE_ACTIONS["sit"]
+    
+    prompt = (
+        f"保持原图{breed_name}的外观特征，"
+        f"{style}，纯白色背景，"
+        f"{action}，镜头正对{species_name}的正前方。"
+    )
+    
+    negative_prompt = _get_negative_prompt("sit")
+    
+    return prompt, negative_prompt
 
 
 def generate_transition_prompt_v3(
     transition: str,
     breed_name: str,
-    body_type: str,
-    color: str,
-    use_detailed: bool = True
-) -> str:
+    body_type: str = "",
+    color: str = "",
+    use_detailed: bool = True,
+    ai_features: Optional[Dict] = None,
+    species: str = "dog"
+) -> Tuple[str, str]:
     """
-    生成过渡视频的prompt (v3.0单行格式)
-
-    Args:
-        transition: 过渡名称 (如 "sit2walk")
-        breed_name: 品种名
-        body_type: 体型 [未使用]
-        color: 颜色 [未使用]
-        use_detailed: 是否使用详细描述 [未使用]
-
+    生成过渡视频的prompt
+    
     Returns:
-        过渡视频prompt
+        (prompt, negative_prompt) 元组
     """
-    breed_config = get_breed_config(breed_name)
+    style = _get_style(breed_name, species)
+    species_name = _get_species_name(species)
+    action = TRANSITION_ACTIONS.get(transition, "进行动作过渡")
+    
+    prompt = (
+        f"保持原图{breed_name}的外观特征，"
+        f"{style}，纯白色背景，"
+        f"{action}，镜头正对{species_name}的正前方。"
+    )
+    
+    negative_prompt = _get_negative_prompt(transition)
+    
+    return prompt, negative_prompt
 
-    if not breed_config:
-        return f"错误: 未找到品种配置 {breed_name}"
 
-    species_type = breed_config.get("species_type", "狗")
-    species_name = "犬" if species_type == "狗" else "猫"
+def generate_loop_prompt_v3(
+    pose: str,
+    breed_name: str,
+    body_type: str = "",
+    color: str = "",
+    ai_features: Optional[Dict] = None,
+    species: str = "dog"
+) -> Tuple[str, str]:
+    """
+    生成循环视频的prompt
+    
+    Returns:
+        (prompt, negative_prompt) 元组
+    """
+    style = _get_style(breed_name, species)
+    species_name = _get_species_name(species)
+    action = POSE_ACTIONS.get(pose, "保持姿势")
+    
+    prompt = (
+        f"保持原图{breed_name}的外观特征，"
+        f"{style}，纯白色背景，"
+        f"{action}，镜头正对{species_name}的正前方。"
+    )
+    
+    negative_prompt = _get_negative_prompt(pose)
+    
+    return prompt, negative_prompt
 
-    # 过渡动作描述 - 参考截图格式
-    transition_actions = {
-        "sit2walk": f"从坐姿自然站起，不要双脚同时离地，然后慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变",
-        "sit2rest": "从坐姿身体向前倾，前腿向前伸展后腿向后伸展，肚子前部贴地呈趴卧姿势，头抬起眼睛睁开",
-        "sit2sleep": "从坐姿身体向前倾倒趴下，四肢放松伸展肚子贴地，头放下贴近地面，闭眼，嘴微张有节奏打呼噜，鼻子有气体呼入呼出",
-        "rest2sleep": "保持趴姿肚子贴地，头慢慢放下，眼睛缓缓闭上，身体完全放松，嘴微张有节奏打呼噜，鼻子有明显气体呼入呼出",
-        "rest2sit": "从趴卧姿势自然挺身，不要双脚同时离地，后腿弯曲臀部下沉呈坐姿",
-        "rest2walk": f"从趴卧姿势自然站起，不要双脚同时离地，然后慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变",
-        "walk2sit": f"慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变，逐渐减速停下，后腿弯曲臀部下沉呈坐姿",
-        "walk2rest": f"慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变，逐渐减速停下，身体向前趴下肚子贴地，头抬起眼睛睁开",
-        "walk2sleep": f"慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变，逐渐减速停下趴下，头放下闭眼，嘴微张打呼噜",
-        "sleep2sit": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，自然挺起身体，不要双脚同时离地，后腿弯曲坐下前腿直立呈坐姿",
-        "sleep2rest": "从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，头抬起，保持趴卧但呈警觉状态，眼睛睁开环顾四周",
-        "sleep2walk": f"从睡觉闭眼打呼噜状态，慢慢睁眼停止打呼噜，自然站起，不要双脚同时离地，然后慢速行走，不要小跑，前后脚交替移动，镜头始终正对{species_name}的正前方，跟随移动保持距离不变"
-    }
 
-    action = transition_actions.get(transition, "宠物进行动作过渡")
+# ============ 兼容性函数（返回单个字符串）============
 
-    # 涉及walk的过渡动作，镜头描述已经包含在action中，不需要重复
-    walk_transitions = ["sit2walk", "rest2walk", "sleep2walk", "walk2sit", "walk2rest", "walk2sleep"]
-    if transition in walk_transitions:
-        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}。"
-    else:
-        prompt = f"卡通3D{breed_name}，背景是纯白色#FFFFFF，{action}，镜头面对{species_name}的正前方。"
+def get_prompt_only(func, *args, **kwargs) -> str:
+    """只返回prompt，不返回negative_prompt（兼容旧代码）"""
+    result = func(*args, **kwargs)
+    if isinstance(result, tuple):
+        return result[0]
+    return result
 
-    return prompt
 
+# ============ 测试 ============
 
 if __name__ == "__main__":
-    # 测试用例
-    print("=== Prompt生成器 v3.0 测试 ===\n")
-
-    test_cases = [
-        {
-            "breed": "西高地白梗",
-            "weight": 7,
-            "gender": "公",
-            "birthday": "2021-03-15",
-            "color": "纯白色"
-        },
-        {
-            "breed": "金毛",
-            "weight": 30,
-            "gender": "公",
-            "birthday": "2020-01-01",
-            "color": "金黄色"
-        },
-        {
-            "breed": "金毛",
-            "weight": 8,
-            "gender": "公",
-            "birthday": "2024-06-01",
-            "color": "金黄色"
-        },
-        {
-            "breed": "橘猫",
-            "weight": 5,
-            "gender": "公",
-            "birthday": "2022-01-01",
-            "color": "橘色"
-        },
-        {
-            "breed": "英短",
-            "weight": 5.5,
-            "gender": "母",
-            "birthday": "2021-06-01",
-            "color": "蓝灰色"
-        }
-    ]
-
-    for i, case in enumerate(test_cases, 1):
-        print(f"【测试{i}: {case['breed']} - {case['weight']}kg】")
-        prompt = generate_sit_prompt_v3(**case)
-        print(prompt)
-        print("\n" + "="*60 + "\n")
+    print("=== Prompt生成器 v3.0（支持negative_prompt）测试 ===\n")
+    
+    print("【金毛 - Sit】")
+    prompt, neg = generate_sit_prompt_v3("金毛", species="dog")
+    print(f"正向: {prompt}")
+    print(f"负向: {neg}")
+    print()
+    
+    print("【金毛 - sit2walk过渡】")
+    prompt, neg = generate_transition_prompt_v3("sit2walk", "金毛", species="dog")
+    print(f"正向: {prompt}")
+    print(f"负向: {neg}")
+    print()
+    
+    print("【金毛 - walk循环】")
+    prompt, neg = generate_loop_prompt_v3("walk", "金毛", species="dog")
+    print(f"正向: {prompt}")
+    print(f"负向: {neg}")
+    print()
+    
+    print("【橘猫 - sleep循环】")
+    prompt, neg = generate_loop_prompt_v3("sleep", "橘猫", species="cat")
+    print(f"正向: {prompt}")
+    print(f"负向: {neg}")
+    print()
+    
+    print("=" * 60)
+    print("【所有负向提示词】")
+    for action in ["sit", "walk", "rest", "sleep", "sit2walk", "walk2sit"]:
+        print(f"{action}: {_get_negative_prompt(action)}")

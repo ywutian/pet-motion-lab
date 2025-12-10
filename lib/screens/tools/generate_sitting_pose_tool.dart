@@ -30,13 +30,24 @@ class _GenerateSittingPoseToolState extends State<GenerateSittingPoseTool> {
 
   String _selectedSpecies = '犬'; // 默认选择犬
 
-  // 预设提示词模板（使用占位符）
+  // 预设提示词模板（v3.0新版格式）
   final Map<String, String> _presetPromptTemplates = {
-    '坐姿': '卡通3D{breed}，背景是纯白色0x000000，坐在地上四处张望，镜头面对{species}的正前方。',
-    '行走': '卡通3D{breed}，背景是纯白色0x000000，往前走，镜头面对{species}的正前方。',
-    '睡觉': '卡通3D{breed}，背景是纯白色0x000000，在睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。',
-    '休息': '卡通3D{breed}，背景是纯白色0x000000，趴在地上四处张望，镜头面对{species}的正前方。',
+    '坐姿': '保持原图{breed}的外观特征，{style}，纯白色背景，坐姿，抬头四处张望，镜头正对{species}的正前方。',
+    '行走': '保持原图{breed}的外观特征，{style}，纯白色背景，四脚着地自然行走，前后脚交替移动，镜头正对{species}的正前方。',
+    '睡觉': '保持原图{breed}的外观特征，{style}，纯白色背景，趴着睡觉，头放下，闭眼，打呼噜，鼻子有气体呼入呼出，镜头正对{species}的正前方。',
+    '休息': '保持原图{breed}的外观特征，{style}，纯白色背景，趴卧，肚子贴地，头抬起，眼睛睁开，镜头正对{species}的正前方。',
   };
+
+  // 负向提示词模板
+  final Map<String, String> _negativePromptTemplates = {
+    '坐姿': '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，站立，行走，奔跑',
+    '行走': '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，跳跃，小跑，奔跑，四脚同时离地',
+    '睡觉': '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，站立，行走，奔跑',
+    '休息': '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，站立，行走，奔跑',
+  };
+
+  String _currentPose = '坐姿';
+  String _currentNegativePrompt = '';
 
   @override
   void initState() {
@@ -53,17 +64,29 @@ class _GenerateSittingPoseToolState extends State<GenerateSittingPoseTool> {
     super.dispose();
   }
 
+  // 根据物种获取风格
+  String _getStyle() {
+    if (_selectedSpecies == '犬') {
+      return '3D卡通动画风格，色彩鲜艳明亮，卡通化柔和阴影';
+    } else {
+      return '迪士尼3D动画风格，温暖明亮色调，柔和艺术化光影';
+    }
+  }
+
   // 根据模板和用户输入生成提示词
   void _updatePromptFromTemplate(String pose) {
     final template = _presetPromptTemplates[pose]!;
     final breed = _breedController.text.trim();
 
     String prompt = template;
-    prompt = prompt.replaceAll('{breed}', breed.isEmpty ? '宠物品种' : breed);
+    prompt = prompt.replaceAll('{breed}', breed.isEmpty ? '宠物' : breed);
     prompt = prompt.replaceAll('{species}', _selectedSpecies);
+    prompt = prompt.replaceAll('{style}', _getStyle());
 
     setState(() {
       _promptController.text = prompt;
+      _currentPose = pose;
+      _currentNegativePrompt = _negativePromptTemplates[pose] ?? '';
     });
   }
 
@@ -112,6 +135,7 @@ class _GenerateSittingPoseToolState extends State<GenerateSittingPoseTool> {
       final result = await _klingService.imageToImage(
         imageFile: _selectedImage!,
         prompt: prompt,
+        negativePrompt: _currentNegativePrompt,
       );
 
       setState(() {

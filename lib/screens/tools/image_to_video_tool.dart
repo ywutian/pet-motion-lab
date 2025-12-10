@@ -32,26 +32,37 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
   String _firstFramePose = 'walk'; // 首帧姿势（图片中的动作）
   String _lastFramePose = 'walk'; // 尾帧姿势（目标动作）
 
-  // 过渡提示词模板（与首尾帧生成视频相同）
+  // 过渡提示词模板（v3.0新版格式）
   final Map<String, String> _transitionPrompts = {
-    'sit2walk': '卡通3D{breed}，背景是纯白色0x000000，宠物起立，然后往前走，镜头面对{species}的正前方。',
-    'sit2sleep': '卡通3D{breed}，背景是纯白色0x000000，宠物趴下，然后睡觉，镜头面对{species}的正前方。',
-    'sit2rest': '卡通3D{breed}，背景是纯白色0x000000，宠物趴下，然后休息（趴下但是睁着眼睛），镜头面对{species}的正前方。',
-    'walk2sit': '卡通3D{breed}，背景是纯白色0x000000，宠物往前走，然后坐下，镜头面对{species}的正前方。',
-    'walk2sleep': '卡通3D{breed}，背景是纯白色0x000000，宠物往前走，然后睡觉，镜头面对{species}的正前方。',
-    'walk2rest': '卡通3D{breed}，背景是纯白色0x000000，宠物往前走，然后休息，镜头面对{species}的正前方。',
-    'sleep2walk': '卡通3D{breed}，背景是纯白色0x000000，宠物睁眼，然后起立，往前走，镜头面对{species}的正前方。',
-    'sleep2rest': '卡通3D{breed}，背景是纯白色0x000000，宠物睁眼，四处张望，镜头面对{species}的正前方。',
-    'sleep2sit': '卡通3D{breed}，背景是纯白色0x000000，宠物睁眼，然后坐起来，镜头面对{species}的正前方。',
-    'rest2sit': '卡通3D{breed}，背景是纯白色0x000000，宠物起立，然后坐下，镜头面对{species}的正前方。',
-    'rest2walk': '卡通3D{breed}，背景是纯白色0x000000，宠物起立，然后往前走，镜头面对{species}的正前方。',
-    'rest2sleep': '卡通3D{breed}，背景是纯白色0x000000，宠物闭眼睡觉，在打呼噜，有气体呼入呼出，镜头面对{species}的正前方。',
-    // 相同姿势的循环动作
-    'walk': '卡通3D{breed}，背景是纯白色0x000000，宠物往前走，自然流畅的动作，镜头面对{species}的正前方。',
-    'rest': '卡通3D{breed}，背景是纯白色0x000000，宠物趴着休息，四处张望，镜头面对{species}的正前方。',
-    'sit': '卡通3D{breed}，背景是纯白色0x000000，宠物坐着，四处张望，镜头面对{species}的正前方。',
-    'sleep': '卡通3D{breed}，背景是纯白色0x000000，宠物睡觉，打呼噜，有气体呼入呼出，镜头面对{species}的正前方。',
+    // 过渡动作
+    'sit2walk': '保持原图{breed}的外观特征，{style}，纯白色背景，从坐姿站起，然后自然行走，前后脚交替移动，镜头正对{species}的正前方。',
+    'sit2sleep': '保持原图{breed}的外观特征，{style}，纯白色背景，从坐姿趴下，头放下，闭眼打呼噜，镜头正对{species}的正前方。',
+    'sit2rest': '保持原图{breed}的外观特征，{style}，纯白色背景，从坐姿向前趴下，肚子贴地，头抬起眼睛睁开，镜头正对{species}的正前方。',
+    'walk2sit': '保持原图{breed}的外观特征，{style}，纯白色背景，行走减速停下，后腿弯曲坐下，镜头正对{species}的正前方。',
+    'walk2sleep': '保持原图{breed}的外观特征，{style}，纯白色背景，行走减速停下，趴下，闭眼打呼噜，镜头正对{species}的正前方。',
+    'walk2rest': '保持原图{breed}的外观特征，{style}，纯白色背景，行走减速停下，向前趴下，头抬起，镜头正对{species}的正前方。',
+    'sleep2walk': '保持原图{breed}的外观特征，{style}，纯白色背景，睁眼，站起，然后自然行走，前后脚交替移动，镜头正对{species}的正前方。',
+    'sleep2rest': '保持原图{breed}的外观特征，{style}，纯白色背景，睁眼，头抬起，保持趴卧，镜头正对{species}的正前方。',
+    'sleep2sit': '保持原图{breed}的外观特征，{style}，纯白色背景，睁眼，撑起身体，后腿弯曲坐下，镜头正对{species}的正前方。',
+    'rest2sit': '保持原图{breed}的外观特征，{style}，纯白色背景，从趴卧撑起身体，后腿弯曲坐下，镜头正对{species}的正前方。',
+    'rest2walk': '保持原图{breed}的外观特征，{style}，纯白色背景，从趴卧站起，然后自然行走，前后脚交替移动，镜头正对{species}的正前方。',
+    'rest2sleep': '保持原图{breed}的外观特征，{style}，纯白色背景，保持趴卧，头慢慢放下，闭眼打呼噜，镜头正对{species}的正前方。',
+    // 循环动作
+    'walk': '保持原图{breed}的外观特征，{style}，纯白色背景，四脚着地自然行走，前后脚交替移动，镜头正对{species}的正前方。',
+    'rest': '保持原图{breed}的外观特征，{style}，纯白色背景，趴卧，肚子贴地，头抬起，眼睛睁开，镜头正对{species}的正前方。',
+    'sit': '保持原图{breed}的外观特征，{style}，纯白色背景，坐姿，抬头四处张望，镜头正对{species}的正前方。',
+    'sleep': '保持原图{breed}的外观特征，{style}，纯白色背景，趴着睡觉，头放下，闭眼，打呼噜，鼻子有气体呼入呼出，镜头正对{species}的正前方。',
   };
+
+  // 负向提示词
+  String _currentNegativePrompt = '';
+
+  String _getNegativePrompt(String key) {
+    if (key.contains('walk')) {
+      return '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，跳跃，小跑，奔跑，四脚同时离地';
+    }
+    return '写实照片感，摄影质感，模糊，噪点，变形，多余肢体，站立，行走，奔跑';
+  }
 
   @override
   void initState() {
@@ -66,10 +77,19 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
     super.dispose();
   }
 
+  // 根据物种获取风格
+  String _getStyle() {
+    if (_selectedSpecies == '犬') {
+      return '3D卡通动画风格，色彩鲜艳明亮，卡通化柔和阴影';
+    } else {
+      return '迪士尼3D动画风格，温暖明亮色调，柔和艺术化光影';
+    }
+  }
+
   // 更新提示词
   void _updatePrompt() {
     final breed = _breedController.text.trim();
-    final breedText = breed.isEmpty ? '宠物品种' : breed;
+    final breedText = breed.isEmpty ? '宠物' : breed;
 
     String key;
     if (_firstFramePose == _lastFramePose) {
@@ -83,9 +103,11 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
     final template = _transitionPrompts[key] ?? '自然流畅的动画效果';
     final prompt = template
         .replaceAll('{breed}', breedText)
-        .replaceAll('{species}', _selectedSpecies);
+        .replaceAll('{species}', _selectedSpecies)
+        .replaceAll('{style}', _getStyle());
 
     _promptController.text = prompt;
+    _currentNegativePrompt = _getNegativePrompt(key);
   }
 
   // 生成提示词（用于向后兼容）
@@ -132,6 +154,7 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
       final result = await _klingService.imageToVideo(
         imageFile: _selectedImage!,
         prompt: prompt,
+        negativePrompt: _currentNegativePrompt,
       );
 
       setState(() {

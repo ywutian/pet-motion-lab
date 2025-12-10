@@ -12,15 +12,22 @@ class KlingToolsService {
   Future<File> imageToImage({
     required File imageFile,
     required String prompt,
+    String negativePrompt = '',
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/kling/tools/image-to-image');
       print('🌐 正在连接: $uri');
       print('  提示词: $prompt');
+      if (negativePrompt.isNotEmpty) {
+        print('  负向提示词: $negativePrompt');
+      }
 
       final request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
       request.fields['prompt'] = prompt;
+      if (negativePrompt.isNotEmpty) {
+        request.fields['negative_prompt'] = negativePrompt;
+      }
 
       print('📤 发送图片...');
       final response = await request.send();
@@ -51,15 +58,22 @@ class KlingToolsService {
   Future<File> imageToVideo({
     required File imageFile,
     required String prompt,
+    String negativePrompt = '',
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/api/kling/tools/image-to-video');
       print('🌐 正在连接: $uri');
       print('  提示词: $prompt');
+      if (negativePrompt.isNotEmpty) {
+        print('  负向提示词: $negativePrompt');
+      }
 
       final request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
       request.fields['prompt'] = prompt;
+      if (negativePrompt.isNotEmpty) {
+        request.fields['negative_prompt'] = negativePrompt;
+      }
 
       print('📤 发送图片...');
       final response = await request.send();
