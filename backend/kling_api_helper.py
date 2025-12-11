@@ -18,8 +18,8 @@ class KlingAPI:
     def __init__(self, access_key: str, secret_key: str, base_url: str = None):
         self.access_key = access_key
         self.secret_key = secret_key
-        # 默认使用国内版，允许通过参数覆盖
-        self.base_url = base_url or "https://api-beijing.klingai.com"
+        # 默认使用海外版 API
+        self.base_url = base_url or "https://api.klingai.com"
 
         # 调试信息
         if not self.access_key:

@@ -82,7 +82,7 @@ async def health_check():
         KLING_SECRET_KEY,
         KLING_VIDEO_ACCESS_KEY,
         KLING_VIDEO_SECRET_KEY,
-        KLING_OVERSEAS_BASE_URL,
+        KLING_BASE_URL,
     )
 
     return {
@@ -96,8 +96,8 @@ async def health_check():
             "flux_models": "disabled"
         },
         "api_endpoints": {
-            "image_api": "https://api-beijing.klingai.com",
-            "video_api": KLING_OVERSEAS_BASE_URL
+            "image_api": KLING_BASE_URL,
+            "video_api": KLING_BASE_URL
         },
         "api_keys": {
             "image_access_key": f"{KLING_ACCESS_KEY[:8]}..." if KLING_ACCESS_KEY else "NOT_SET",
@@ -137,7 +137,7 @@ async def test_api_keys():
             token = jwt.encode(payload, secret_key, headers=headers)
 
             # 尝试调用一个简单的 API（查询任务列表）
-            test_url = "https://api-beijing.klingai.com/v1/images/generations"
+            test_url = "https://api.klingai.com/v1/images/generations"
             auth_headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f'Bearer {token}'
@@ -146,7 +146,7 @@ async def test_api_keys():
             # 发送一个空的 GET 请求来测试认证
             # 注意：这里用 GET 请求查询，不会消耗额度
             response = requests.get(
-                "https://api-beijing.klingai.com/v1/images/generations/test-invalid-id",
+                "https://api.klingai.com/v1/images/generations/test-invalid-id",
                 headers=auth_headers,
                 timeout=10
             )

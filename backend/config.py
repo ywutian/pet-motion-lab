@@ -16,30 +16,27 @@ except ImportError:
 
 # ============================================
 # 可灵AI API 配置（从环境变量读取）
+# 统一使用海外版 API (api.klingai.com)
 # ============================================
 
-# 图片生成 API 密钥
+# API 密钥（统一使用一套密钥）
 KLING_ACCESS_KEY = os.getenv("KLING_ACCESS_KEY", "")
 KLING_SECRET_KEY = os.getenv("KLING_SECRET_KEY", "")
 
-# 视频生成 API 密钥（独立账户）
-KLING_VIDEO_ACCESS_KEY = os.getenv("KLING_VIDEO_ACCESS_KEY", "")
-KLING_VIDEO_SECRET_KEY = os.getenv("KLING_VIDEO_SECRET_KEY", "")
+# 视频生成 API 密钥（向后兼容，如果设置了视频密钥则使用，否则使用统一密钥）
+KLING_VIDEO_ACCESS_KEY = os.getenv("KLING_VIDEO_ACCESS_KEY", "") or KLING_ACCESS_KEY
+KLING_VIDEO_SECRET_KEY = os.getenv("KLING_VIDEO_SECRET_KEY", "") or KLING_SECRET_KEY
 
-# 海外版API URL（用于视频生成）
-KLING_OVERSEAS_BASE_URL = os.getenv("KLING_OVERSEAS_BASE_URL", "https://api.klingai.com")
+# 海外版API URL（图片和视频统一使用）
+KLING_BASE_URL = os.getenv("KLING_BASE_URL", "https://api.klingai.com")
+# 向后兼容旧的环境变量名
+KLING_OVERSEAS_BASE_URL = os.getenv("KLING_OVERSEAS_BASE_URL", KLING_BASE_URL)
 
 if not KLING_ACCESS_KEY or not KLING_SECRET_KEY:
-    print("⚠️ 警告: 未设置可灵AI图片密钥环境变量 (KLING_ACCESS_KEY, KLING_SECRET_KEY)")
+    print("⚠️ 警告: 未设置可灵AI密钥环境变量 (KLING_ACCESS_KEY, KLING_SECRET_KEY)")
     print("   请在环境变量中设置，或在本地开发时使用 .env 文件")
 else:
-    print(f"✅ 可灵AI图片密钥已配置")
-
-if not KLING_VIDEO_ACCESS_KEY or not KLING_VIDEO_SECRET_KEY:
-    print("⚠️ 警告: 未设置可灵AI视频密钥环境变量 (KLING_VIDEO_ACCESS_KEY, KLING_VIDEO_SECRET_KEY)")
-    print("   请在环境变量中设置，或在本地开发时使用 .env 文件")
-else:
-    print(f"✅ 可灵AI视频密钥已配置")
+    print(f"✅ 可灵AI密钥已配置（使用海外版 API）")
 
 # ============================================
 # Google AI API 配置（用于图片内容审核）

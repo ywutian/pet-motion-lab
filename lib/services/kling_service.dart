@@ -6,7 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 class KlingService {
-  static const String _baseUrl = 'https://api-beijing.klingai.com';
+  // 使用海外版 API
+  static const String _baseUrl = 'https://api.klingai.com';
   static const String _accessKey = 'ARNETYRNbTm8KDpKHrpBBF4NT8TRfAKt';
   static const String _secretKey = 'HnPMANpdakffkTYgft9EfrerB8bhgpLR';
 

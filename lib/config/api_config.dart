@@ -35,8 +35,8 @@ class ApiConfig {
     }
   }
 
-  /// 可灵AI API 地址（直接调用可灵AI时使用）
-  static const String klingApiUrl = 'https://api-beijing.klingai.com';
+  /// 可灵AI API 地址（直接调用可灵AI时使用 - 海外版）
+  static const String klingApiUrl = 'https://api.klingai.com';
 
   /// 是否为生产环境
   static bool get isProduction => _envApiUrl.isNotEmpty;

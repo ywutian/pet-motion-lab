@@ -121,24 +121,25 @@ class KlingPipeline:
         video_access_key: str = None,
         video_secret_key: str = None,
     ):
-        # 图片 API 实例 - 明确使用国内版
+        # 图片 API 实例 - 统一使用海外版
         self.kling = KlingAPI(
             access_key,
             secret_key,
-            base_url="https://api-beijing.klingai.com"
+            base_url=config.KLING_BASE_URL
         )
+        print(f"✅ 图片生成使用海外版 API: {config.KLING_BASE_URL}")
 
-        # 视频 API 实例 - 使用海外版
+        # 视频 API 实例 - 统一使用海外版
         if video_access_key and video_secret_key:
             self.kling_video = KlingAPI(
                 video_access_key,
                 video_secret_key,
-                base_url=config.KLING_OVERSEAS_BASE_URL
+                base_url=config.KLING_BASE_URL
             )
             print("✅ 视频生成使用独立 API 密钥（海外版）")
         else:
             self.kling_video = self.kling
-            print("ℹ️ 视频生成复用图片 API 密钥（国内版）")
+            print("ℹ️ 视频生成复用图片 API 密钥（海外版）")
 
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

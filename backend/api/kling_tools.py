@@ -17,6 +17,7 @@ from config import (
     KLING_SECRET_KEY,
     KLING_VIDEO_ACCESS_KEY,
     KLING_VIDEO_SECRET_KEY,
+    KLING_BASE_URL,
 )
 
 router = APIRouter(prefix="/api/kling/tools", tags=["kling-tools"])
@@ -69,8 +70,8 @@ async def image_to_image(
         if negative_prompt:
             print(f"  负向提示词: {negative_prompt}")
         
-        # 调用可灵AI
-        kling = KlingAPI(ACCESS_KEY, SECRET_KEY)
+        # 调用可灵AI（使用海外版 API）
+        kling = KlingAPI(ACCESS_KEY, SECRET_KEY, base_url=KLING_BASE_URL)
 
         # 创建图生图任务
         result = kling.image_to_image(
@@ -150,8 +151,8 @@ async def image_to_video(
         if negative_prompt:
             print(f"  负向提示词: {negative_prompt}")
         
-        # 调用可灵AI（使用视频专用 API 密钥）
-        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
+        # 调用可灵AI（使用海外版 API）
+        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY, base_url=KLING_BASE_URL)
 
         # 创建图生视频任务
         result = kling.image_to_video(
@@ -232,8 +233,8 @@ async def frames_to_video(
         print(f"  首帧: {first_frame_path}")
         print(f"  尾帧: {last_frame_path}")
 
-        # 调用可灵AI（使用视频专用 API 密钥）
-        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY)
+        # 调用可灵AI（使用海外版 API）
+        kling = KlingAPI(VIDEO_ACCESS_KEY, VIDEO_SECRET_KEY, base_url=KLING_BASE_URL)
 
         # 创建图生视频任务
         prompt = "平滑过渡到目标姿态，自然流畅的动画效果"
