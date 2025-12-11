@@ -158,15 +158,25 @@ class KlingAPI:
                 print(f"  ✅ 任务成功完成: {status}")
                 return task_data
             elif status_lower in ['failed', 'error', 'failure']:
-                # 获取错误信息（可能来自多个字段）
+                # 打印完整响应用于调试
+                print(f"  📋 任务失败，完整响应: {json.dumps(task_data, ensure_ascii=False, indent=2)}")
+                
+                # 获取错误信息（优先使用专门的错误字段）
+                data = task_data.get('data', {})
                 error_msg = (
-                    task_data.get('data', {}).get('message') or
-                    task_data.get('message') or
-                    task_data.get('data', {}).get('error') or
+                    data.get('task_status_msg') or  # 可灵API的任务状态消息
+                    data.get('fail_reason') or       # 失败原因
+                    data.get('error_msg') or         # 错误消息
+                    task_data.get('msg') or          # 顶层消息
                     task_data.get('error') or
                     '未知错误'
                 )
-                print(f"  ❌ 任务失败: status={status}, message={error_msg}")
+                
+                # 如果错误信息看起来像是状态值，说明实际错误未知
+                if error_msg and error_msg.upper() in ['SUCCEED', 'SUCCESS', 'COMPLETED', 'DONE']:
+                    error_msg = f"任务状态为failed，但未返回具体错误原因"
+                
+                print(f"  ❌ 任务失败: status={status}, 错误原因={error_msg}")
                 raise Exception(f"任务失败: {error_msg}")
 
             # 等待后继续轮询
@@ -388,15 +398,25 @@ class KlingAPI:
                 print(f"  ✅ 任务成功完成: {status}")
                 return task_data
             elif status_lower in ['failed', 'error', 'failure']:
-                # 获取错误信息（可能来自多个字段）
+                # 打印完整响应用于调试
+                print(f"  📋 视频任务失败，完整响应: {json.dumps(task_data, ensure_ascii=False, indent=2)}")
+                
+                # 获取错误信息（优先使用专门的错误字段）
+                data = task_data.get('data', {})
                 error_msg = (
-                    task_data.get('data', {}).get('message') or
-                    task_data.get('message') or
-                    task_data.get('data', {}).get('error') or
+                    data.get('task_status_msg') or  # 可灵API的任务状态消息
+                    data.get('fail_reason') or       # 失败原因
+                    data.get('error_msg') or         # 错误消息
+                    task_data.get('msg') or          # 顶层消息
                     task_data.get('error') or
                     '未知错误'
                 )
-                print(f"  ❌ 任务失败: status={status}, message={error_msg}")
+                
+                # 如果错误信息看起来像是状态值，说明实际错误未知
+                if error_msg and error_msg.upper() in ['SUCCEED', 'SUCCESS', 'COMPLETED', 'DONE']:
+                    error_msg = f"任务状态为failed，但未返回具体错误原因"
+                
+                print(f"  ❌ 视频任务失败: status={status}, 错误原因={error_msg}")
                 raise Exception(f"任务失败: {error_msg}")
 
             # 等待后继续轮询
