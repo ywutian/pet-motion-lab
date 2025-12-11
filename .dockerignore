@@ -1,0 +1,61 @@
+# Docker 构建时忽略的文件
+# 这些文件不会包含在 Docker 构建上下文中，加快构建速度
+
+# Flutter 相关（不需要在 Docker 中）
+android/
+ios/
+macos/
+web/
+lib/
+test/
+build/
+.dart_tool/
+.packages
+.pub-cache/
+pubspec.yaml
+pubspec.lock
+analysis_options.yaml
+
+# 前端构建产物
+build/
+
+# 测试文件
+*.mp4
+*.log
+
+# 开发脚本
+start_backend_*.sh
+build_web.sh
+
+# 文档（可选，如果不需要在容器中）
+*.md
+!README.md
+
+# 其他不需要的文件
+.git/
+.gitignore
+.railwayignore
+.dockerignore
+.DS_Store
+
+# 输出目录（会在运行时创建）
+output/
+backend/output/
+
+# 虚拟环境（会在 Docker 中重新安装）
+backend/venv/
+venv/
+
+# 环境变量文件（使用 Railway 的环境变量）
+.env
+*.env
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+

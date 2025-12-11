@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: pet-motion-lab-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free  # 或 starter ($7/月，无休眠限制)
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: PYTHONPATH
+        value: /app/backend
+      # 以下环境变量需要在 Render Dashboard 中设置（不要在这里写密钥）
+      # KLING_ACCESS_KEY
+      # KLING_SECRET_KEY
+      # KLING_VIDEO_ACCESS_KEY
+      # KLING_VIDEO_SECRET_KEY
+      # KLING_OVERSEAS_BASE_URL
+      # GOOGLE_API_KEY (可选)
+      # ENABLE_AI_IMAGE_CHECK (可选)
+    healthCheckPath: /health
+

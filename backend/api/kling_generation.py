@@ -695,8 +695,8 @@ async def init_pet_task(
         shutil.copyfileobj(file.file, buffer)
 
     # ====== 图片预处理验证 ======
-    from backend.utils.image_validator import validate_image
-    from backend.config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
+    from utils.image_validator import validate_image
+    from config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
 
     print(f"🔍 开始验证图片: {upload_path}")
 
@@ -1157,125 +1157,222 @@ async def generate_pet_animations(
 
     # 生成任务ID
     pet_id = f"pet_{int(time.time())}"
-
-    # ========== 并发控制检查 ==========
-    can_run, message, queue_pos = _check_and_acquire_slot(pet_id, user_info=f"{breed}_{species}")
+    upload_path = None
     
-    if not can_run:
-        if queue_pos == -1:
-            # 队列已满，直接拒绝
+    try:
+        # ========== 并发控制检查 ==========
+        can_run, message, queue_pos = _check_and_acquire_slot(pet_id, user_info=f"{breed}_{species}")
+        
+        if not can_run:
+            if queue_pos == -1:
+                # 队列已满，直接拒绝
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "系统繁忙",
+                        "message": message,
+                        "system_status": _get_system_status()
+                    }
+                )
+            else:
+                # 返回排队信息（但不阻塞，让用户知道需要等待）
+                # 实际上我们这里选择拒绝，让用户稍后再试
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "系统繁忙",
+                        "message": message,
+                        "queue_position": queue_pos,
+                        "system_status": _get_system_status(),
+                        "suggestion": "请等待当前任务完成后再提交，或稍后再试"
+                    }
+                )
+
+        # 保存上传的文件
+        upload_path = UPLOAD_DIR / f"{pet_id}_{file.filename}"
+        try:
+            with open(upload_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        except (OSError, IOError) as e:
+            print(f"❌ 文件保存失败: {str(e)}")
             raise HTTPException(
-                status_code=503,
+                status_code=500,
                 detail={
-                    "error": "系统繁忙",
-                    "message": message,
-                    "system_status": _get_system_status()
+                    "error": "文件保存失败",
+                    "message": f"无法保存上传的文件: {str(e)}",
+                    "suggestion": "请检查服务器磁盘空间和权限"
                 }
             )
-        else:
-            # 返回排队信息（但不阻塞，让用户知道需要等待）
-            # 实际上我们这里选择拒绝，让用户稍后再试
+
+        # ====== 图片预处理验证 ======
+        from utils.image_validator import validate_image
+        from config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
+
+        print(f"🔍 开始验证图片: {upload_path}")
+
+        # 执行图片验证（包括基础验证和可选的AI检查）
+        try:
+            validation_result = validate_image(
+                file_path=str(upload_path),
+                strict_mode=False,  # 不使用严格模式
+                enable_ai_check=ENABLE_AI_IMAGE_CHECK,
+                google_api_key=GOOGLE_API_KEY if ENABLE_AI_IMAGE_CHECK else None
+            )
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"❌ 图片验证过程出错: {str(e)}")
+            print(f"堆栈:\n{error_trace}")
+            # 删除上传的文件
+            if upload_path and upload_path.exists():
+                upload_path.unlink(missing_ok=True)
             raise HTTPException(
-                status_code=503,
+                status_code=500,
                 detail={
-                    "error": "系统繁忙",
-                    "message": message,
-                    "queue_position": queue_pos,
-                    "system_status": _get_system_status(),
-                    "suggestion": "请等待当前任务完成后再提交，或稍后再试"
+                    "error": "图片验证失败",
+                    "message": f"验证过程出错: {str(e)}",
+                    "suggestion": "请检查图片格式是否正确"
                 }
             )
 
-    # 保存上传的文件
-    upload_path = UPLOAD_DIR / f"{pet_id}_{file.filename}"
-    with open(upload_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        # 处理验证结果
+        if not validation_result.get('valid', False):
+            # 验证失败（严重错误），拒绝请求
+            error_messages = [err.get('message', '未知错误') for err in validation_result.get('errors', [])]
+            error_detail = "; ".join(error_messages) if error_messages else "图片验证失败"
 
-    # ====== 图片预处理验证 ======
-    from backend.utils.image_validator import validate_image
-    from backend.config import ENABLE_AI_IMAGE_CHECK, GOOGLE_API_KEY
+            # 删除上传的文件
+            if upload_path and upload_path.exists():
+                upload_path.unlink(missing_ok=True)
 
-    print(f"🔍 开始验证图片: {upload_path}")
+            print(f"❌ 图片验证失败: {error_detail}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "图片验证失败",
+                    "messages": error_messages,
+                    "severity": validation_result.get('severity_level', 'error'),
+                    "details": validation_result
+                }
+            )
 
-    # 执行图片验证（包括基础验证和可选的AI检查）
-    validation_result = validate_image(
-        file_path=str(upload_path),
-        strict_mode=False,  # 不使用严格模式
-        enable_ai_check=ENABLE_AI_IMAGE_CHECK,
-        google_api_key=GOOGLE_API_KEY if ENABLE_AI_IMAGE_CHECK else None
-    )
+        # 检查是否有警告（可以继续处理，但给用户提示）
+        warnings = validation_result.get('warnings', [])
+        if warnings:
+            warning_messages = [warn.get('message', '') for warn in warnings]
+            print(f"⚠️ 图片验证警告: {'; '.join(warning_messages)}")
 
-    # 处理验证结果
-    if not validation_result['valid']:
-        # 验证失败（严重错误），拒绝请求
-        error_messages = [err['message'] for err in validation_result['errors']]
-        error_detail = "; ".join(error_messages)
+        print(f"✅ 图片验证通过 (严重程度: {validation_result.get('severity_level', 'pass')})")
 
-        # 删除上传的文件
-        upload_path.unlink(missing_ok=True)
+        # 初始化任务状态（同时保存到内存和数据库）
+        task_status[pet_id] = {
+            "status": "processing",
+            "progress": 0,
+            "message": "🚀 任务已创建，正在后台处理...",
+            "current_step": "init",
+            "breed": breed,
+            "color": color,
+            "species": species,
+            "weight": weight,
+            "birthday": birthday,
+            "video_model_name": video_model_name,
+            "video_model_mode": video_model_mode,
+            "results": None,
+            "error": None,
+            "started_at": time.time(),
+            "validation_result": validation_result,  # 保存验证结果
+            "validation_warnings": [w.get('message', '') for w in warnings] if warnings else []
+        }
 
-        print(f"❌ 图片验证失败: {error_detail}")
+        # 持久化到数据库
+        try:
+            db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
+                           weight=weight, birthday=birthday)
+            db.update_task(pet_id, status='processing', started_at=time.time())
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"⚠️ 数据库操作失败: {str(e)}")
+            print(f"堆栈:\n{error_trace}")
+            # 数据库失败不影响任务执行，只记录警告
+            # 任务状态已在内存中保存，可以继续执行
+
+        # 启动后台线程执行生成流程
+        try:
+            thread = threading.Thread(
+                target=run_pipeline_in_background,
+                args=(pet_id, str(upload_path), breed, color, species, weight, birthday,
+                      video_model_name, video_model_mode),
+                daemon=True  # 守护线程，主进程退出时自动结束
+            )
+            thread.start()
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"❌ 启动后台任务失败: {str(e)}")
+            print(f"堆栈:\n{error_trace}")
+            # 清理任务状态
+            if pet_id in task_status:
+                del task_status[pet_id]
+            # 释放执行槽位
+            _release_slot(pet_id)
+            # 删除上传的文件
+            if upload_path and upload_path.exists():
+                upload_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "启动后台任务失败",
+                    "message": f"无法启动后台处理线程: {str(e)}",
+                    "suggestion": "请稍后重试"
+                }
+            )
+
+        print(f"📤 后台任务已启动: {pet_id} (模型: {video_model_name})")
+
+        return JSONResponse({
+            "pet_id": pet_id,
+            "status": "processing",
+            "message": "🚀 任务已创建，正在后台处理中...",
+            "video_model": f"{video_model_name} ({video_model_mode})",
+            "note": "请使用 GET /api/kling/status/{pet_id} 查询进度"
+        })
+    
+    except HTTPException:
+        # 重新抛出 HTTP 异常（这些是预期的错误）
+        raise
+    except Exception as e:
+        # 捕获所有未预期的异常
+        error_trace = traceback.format_exc()
+        error_msg = str(e)
+        
+        print(f"\n{'='*70}")
+        print(f"❌ 生成任务创建失败: {pet_id}")
+        print(f"错误: {error_msg}")
+        print(f"堆栈:\n{error_trace}")
+        print(f"{'='*70}\n")
+        
+        # 清理资源
+        if upload_path and upload_path.exists():
+            upload_path.unlink(missing_ok=True)
+        
+        # 释放执行槽位（如果已获取）
+        try:
+            _release_slot(pet_id)
+        except:
+            pass
+        
+        # 清理任务状态
+        if pet_id in task_status:
+            del task_status[pet_id]
+        
+        # 返回友好的错误信息
         raise HTTPException(
-            status_code=400,
+            status_code=500,
             detail={
-                "error": "图片验证失败",
-                "messages": error_messages,
-                "severity": validation_result.get('severity_level', 'error'),
-                "details": validation_result
+                "error": "任务创建失败",
+                "message": f"服务器内部错误: {error_msg}",
+                "suggestion": "请检查日志或联系技术支持",
+                "pet_id": pet_id
             }
         )
-
-    # 检查是否有警告（可以继续处理，但给用户提示）
-    warnings = validation_result.get('warnings', [])
-    if warnings:
-        warning_messages = [warn['message'] for warn in warnings]
-        print(f"⚠️ 图片验证警告: {'; '.join(warning_messages)}")
-
-    print(f"✅ 图片验证通过 (严重程度: {validation_result.get('severity_level', 'pass')})")
-
-    # 初始化任务状态（同时保存到内存和数据库）
-    task_status[pet_id] = {
-        "status": "processing",
-        "progress": 0,
-        "message": "🚀 任务已创建，正在后台处理...",
-        "current_step": "init",
-        "breed": breed,
-        "color": color,
-        "species": species,
-        "weight": weight,
-        "birthday": birthday,
-        "video_model_name": video_model_name,
-        "video_model_mode": video_model_mode,
-        "results": None,
-        "error": None,
-        "started_at": time.time(),
-        "validation_result": validation_result,  # 保存验证结果
-        "validation_warnings": [w['message'] for w in warnings] if warnings else []
-    }
-
-    # 持久化到数据库
-    db.create_task(pet_id=pet_id, breed=breed, color=color, species=species,
-                   weight=weight, birthday=birthday)
-    db.update_task(pet_id, status='processing', started_at=time.time())
-
-    # 启动后台线程执行生成流程
-    thread = threading.Thread(
-        target=run_pipeline_in_background,
-        args=(pet_id, str(upload_path), breed, color, species, weight, birthday,
-              video_model_name, video_model_mode),
-        daemon=True  # 守护线程，主进程退出时自动结束
-    )
-    thread.start()
-
-    print(f"📤 后台任务已启动: {pet_id} (模型: {video_model_name})")
-
-    return JSONResponse({
-        "pet_id": pet_id,
-        "status": "processing",
-        "message": "🚀 任务已创建，正在后台处理中...",
-        "video_model": f"{video_model_name} ({video_model_mode})",
-        "note": "请使用 GET /api/kling/status/{pet_id} 查询进度"
-    })
 
 
 @router.post("/step3/{pet_id}")

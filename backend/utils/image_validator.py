@@ -8,7 +8,14 @@ import imghdr
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 from PIL import Image
-import magic  # python-magic库用于检测MIME类型
+
+# python-magic库用于检测MIME类型（可选）
+try:
+    import magic
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
+    print("⚠️ 警告: python-magic 未安装，将跳过 MIME 类型检测")
 
 
 class ImageValidationError(Exception):
@@ -81,15 +88,19 @@ class ImageValidator:
             return False, f"不支持的图片格式: {img_type}。仅支持 {', '.join(ImageValidator.ALLOWED_FORMATS)}"
 
         # 方法2: 通过MIME类型检测（需要python-magic库）
-        try:
-            mime = magic.Magic(mime=True)
-            mime_type = mime.from_file(file_path)
+        if HAS_MAGIC:
+            try:
+                mime = magic.Magic(mime=True)
+                mime_type = mime.from_file(file_path)
 
-            if mime_type not in ImageValidator.ALLOWED_MIME_TYPES:
-                return False, f"不支持的MIME类型: {mime_type}"
-        except Exception as e:
-            # 如果python-magic不可用，跳过MIME检测
-            print(f"警告: MIME类型检测失败: {e}")
+                if mime_type not in ImageValidator.ALLOWED_MIME_TYPES:
+                    return False, f"不支持的MIME类型: {mime_type}"
+            except Exception as e:
+                # 如果python-magic不可用，跳过MIME检测
+                print(f"⚠️ 警告: MIME类型检测失败: {e}")
+        else:
+            # python-magic 未安装，跳过 MIME 检测
+            print("ℹ️ 跳过 MIME 类型检测（python-magic 未安装）")
 
         return True, None
 
