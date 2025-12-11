@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/kling_tools_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 首尾帧生成视频工具
@@ -211,39 +212,28 @@ class _FramesToVideoToolState extends State<FramesToVideoTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('🎬 首尾帧生成视频'),
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Text(
-                  '上传首帧和尾帧图片，使用可灵AI生成平滑过渡视频',
-                  style: TextStyle(color: Colors.blue.shade700),
-                ),
-              ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('首尾帧生成视频')),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Text('上传首帧和尾帧图片，使用可灵AI生成平滑过渡视频', style: TextStyle(color: theme.colorScheme.onPrimaryContainer)),
             ),
-            AppSpacing.vGapLG,
-
-            // 宠物信息输入
-            Card(
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '🐾 宠物信息',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+          ),
+          AppSpacing.vGapLG,
+          Card(
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('宠物信息', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                     AppSpacing.vGapMD,
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -500,8 +490,7 @@ class _FramesToVideoToolState extends State<FramesToVideoTool> {
                 ),
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }

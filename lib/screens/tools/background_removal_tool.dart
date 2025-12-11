@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/background_removal_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 去除背景工具
@@ -98,97 +99,47 @@ class _BackgroundRemovalToolState extends State<BackgroundRemovalTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('✂️ 去除背景'),
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Text(
-                  '上传图片，自动去除背景，保存透明背景的PNG图片',
-                  style: TextStyle(color: Colors.blue.shade700),
-                ),
-              ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('去除背景')),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Text('上传图片，自动去除背景，保存透明背景的PNG图片', style: TextStyle(color: theme.colorScheme.onPrimaryContainer)),
+            ),
+          ),
+          AppSpacing.vGapLG,
+          FilledButton.icon(onPressed: _pickImage, icon: const Icon(Icons.upload_file), label: const Text('选择图片')),
+          AppSpacing.vGapLG,
+          if (_originalImage != null) ...[
+            Text('原图：', style: theme.textTheme.titleSmall),
+            AppSpacing.vGapSM,
+            ClipRRect(borderRadius: AppSpacing.borderRadiusMD, child: Image.file(_originalImage!, height: 200, fit: BoxFit.contain)),
+            AppSpacing.vGapLG,
+            FilledButton.icon(
+              onPressed: _isProcessing ? null : _removeBackground,
+              icon: _isProcessing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.content_cut),
+              label: Text(_isProcessing ? '处理中...' : '去除背景'),
             ),
             AppSpacing.vGapLG,
-
-            // 选择图片按钮
-            ElevatedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('选择图片'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-              ),
-            ),
-            AppSpacing.vGapLG,
-
-            // 原图预览
-            if (_originalImage != null) ...[
-              const Text('原图：', style: TextStyle(fontWeight: FontWeight.bold)),
-              AppSpacing.vGapSM,
-              Image.file(_originalImage!, height: 200, fit: BoxFit.contain),
-              AppSpacing.vGapLG,
-
-              // 去除背景按钮
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _removeBackground,
-                icon: _isProcessing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.content_cut),
-                label: Text(_isProcessing ? '处理中...' : '去除背景'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                ),
-              ),
-              AppSpacing.vGapLG,
-            ],
-
-            // 处理后的图片
-            if (_processedImage != null) ...[
-              const Text('去除背景后：', style: TextStyle(fontWeight: FontWeight.bold)),
-              AppSpacing.vGapSM,
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  // 棋盘格背景，显示透明效果
-                  color: Colors.grey.shade200,
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Center(
-                  child: Image.file(_processedImage!, fit: BoxFit.contain),
-                ),
-              ),
-              AppSpacing.vGapLG,
-
-              // 保存按钮
-              ElevatedButton.icon(
-                onPressed: _saveToGallery,
-                icon: const Icon(Icons.save),
-                label: const Text('保存到相册'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                ),
-              ),
-            ],
           ],
-        ),
+          if (_processedImage != null) ...[
+            Text('去除背景后：', style: theme.textTheme.titleSmall),
+            AppSpacing.vGapSM,
+            Container(
+              height: 200,
+              decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: AppSpacing.borderRadiusMD),
+              child: Center(child: Image.file(_processedImage!, fit: BoxFit.contain)),
+            ),
+            AppSpacing.vGapLG,
+            FilledButton.icon(onPressed: _saveToGallery, icon: const Icon(Icons.save), label: const Text('保存到相册')),
+          ],
+        ],
       ),
     );
   }

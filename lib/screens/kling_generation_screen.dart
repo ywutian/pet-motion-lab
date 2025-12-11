@@ -7,6 +7,8 @@ import '../services/kling_generation_service.dart';
 import '../providers/settings_provider.dart';
 import '../models/cross_platform_file.dart';
 import '../utils/file_picker_helper.dart';
+import '../widgets/app_scaffold.dart';
+import '../theme/app_spacing.dart';
 import 'kling_result_screen.dart';
 import 'step_selector_screen.dart';
 
@@ -373,12 +375,11 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(
-        title: const Text('🎬 可灵AI宠物动画生成'),
+        title: const Text('可灵AI宠物动画生成'),
         elevation: 0,
         actions: [
-          // 步骤选择器按钮
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -393,30 +394,20 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 上传图片区域
-            _buildImageUploadSection(),
-            const SizedBox(height: 32),
-
-            // 配置区域
-            _buildConfigSection(),
-            const SizedBox(height: 32),
-
-            // 生成按钮
-            _buildGenerateButton(),
-
-            // 进度显示
-            if (_isGenerating) ...[
-              const SizedBox(height: 32),
-              _buildProgressSection(),
-            ],
-
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildImageUploadSection(),
+          AppSpacing.vGapXXL,
+          _buildConfigSection(),
+          AppSpacing.vGapXXL,
+          _buildGenerateButton(),
+          if (_isGenerating) ...[
+            AppSpacing.vGapXXL,
+            _buildProgressSection(),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -509,19 +500,13 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
     return FadeInUp(
       delay: const Duration(milliseconds: 200),
       child: Card(
-        elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: AppSpacing.paddingLG,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '宠物信息',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 24),
-
-              // 品种
+              Text('宠物信息', style: Theme.of(context).textTheme.titleLarge),
+              AppSpacing.vGapLG,
               TextField(
                 controller: _breedController,
                 enabled: !_isGenerating,
@@ -529,12 +514,9 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   labelText: '品种',
                   hintText: '如：布偶猫、金毛犬',
                   prefixIcon: Icon(Icons.pets),
-                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 颜色
+              AppSpacing.vGapMD,
               TextField(
                 controller: _colorController,
                 enabled: !_isGenerating,
@@ -542,27 +524,22 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   labelText: '颜色',
                   hintText: '如：蓝色、金色',
                   prefixIcon: Icon(Icons.palette),
-                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 物种
+              AppSpacing.vGapMD,
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(value: '猫', label: Text('猫'), icon: Icon(Icons.pets)),
                   ButtonSegment(value: '犬', label: Text('犬'), icon: Icon(Icons.pets)),
                 ],
                 selected: {_species},
-                onSelectionChanged: _isGenerating ? null : (Set<String> newSelection) {
-                  setState(() {
-                    _species = newSelection.first;
-                  });
-                },
+                onSelectionChanged: _isGenerating
+                    ? null
+                    : (Set<String> newSelection) {
+                        setState(() => _species = newSelection.first);
+                      },
               ),
-              const SizedBox(height: 16),
-
-              // 重量
+              AppSpacing.vGapMD,
               TextField(
                 controller: _weightController,
                 enabled: !_isGenerating,
@@ -570,20 +547,17 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   labelText: '重量（可选）',
                   hintText: '如：5kg、3.5kg',
                   prefixIcon: Icon(Icons.monitor_weight),
-                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 生日
+              AppSpacing.vGapMD,
               TextField(
                 controller: _birthdayController,
                 enabled: !_isGenerating,
+                readOnly: true,
                 decoration: const InputDecoration(
                   labelText: '生日（可选）',
                   hintText: '如：2020-01-01',
                   prefixIcon: Icon(Icons.cake),
-                  border: OutlineInputBorder(),
                 ),
                 onTap: () async {
                   if (_isGenerating) return;
@@ -595,11 +569,11 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   );
                   if (picked != null) {
                     setState(() {
-                      _birthdayController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                      _birthdayController.text =
+                          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
                     });
                   }
                 },
-                readOnly: true,
               ),
             ],
           ),
@@ -612,19 +586,18 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
     return FadeInUp(
       delay: const Duration(milliseconds: 400),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 主按钮：一键生成
           FilledButton.icon(
             onPressed: _isGenerating ? null : _startGeneration,
             icon: const Icon(Icons.auto_awesome),
             label: const Text('一键生成'),
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 12),
-          // 两个小按钮
+          AppSpacing.vGapMD,
           Row(
             children: [
               Expanded(
@@ -632,20 +605,14 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
                   onPressed: _isGenerating ? null : _startStepConfirmGeneration,
                   icon: const Icon(Icons.playlist_play, size: 18),
                   label: const Text('分步确认'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              AppSpacing.hGapMD,
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _isGenerating ? null : _startMultiModelGeneration,
                   icon: const Icon(Icons.compare_arrows, size: 18),
                   label: const Text('多模型对比'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
             ],
@@ -658,29 +625,28 @@ class _KlingGenerationScreenState extends State<KlingGenerationScreen> {
   Widget _buildProgressSection() {
     return FadeIn(
       child: Card(
-        elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: AppSpacing.paddingLG,
           child: Column(
             children: [
               LinearProgressIndicator(
                 value: _progress,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(4),
+                minHeight: 6,
+                borderRadius: AppSpacing.borderRadiusSM,
               ),
-              const SizedBox(height: 16),
+              AppSpacing.vGapMD,
               Text(
                 _statusMessage,
                 style: Theme.of(context).textTheme.bodyLarge,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              AppSpacing.vGapSM,
               Text(
                 '${(_progress * 100).toInt()}%',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
               ),
             ],
           ),

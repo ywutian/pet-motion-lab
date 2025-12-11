@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/kling_tools_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 图片生成视频工具
@@ -229,120 +230,62 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('🎬 图片生成视频'),
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Text(
-                  '上传一张图片，使用可灵AI生成5秒循环视频',
-                  style: TextStyle(color: Colors.blue.shade700),
-                ),
-              ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('图片生成视频')),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Text('上传一张图片，使用可灵AI生成5秒循环视频', style: TextStyle(color: theme.colorScheme.onPrimaryContainer)),
             ),
-            AppSpacing.vGapLG,
-
-            // 宠物信息输入
-            Card(
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '🐾 宠物信息',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    AppSpacing.vGapMD,
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 物种选择
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('物种', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              const SizedBox(height: 4),
-                              DropdownButtonFormField<String>(
-                                value: _selectedSpecies,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                                  isDense: true,
-                                ),
-                                isExpanded: true,
-                                items: const [
-                                  DropdownMenuItem(value: '犬', child: Text('🐕 犬')),
-                                  DropdownMenuItem(value: '猫', child: Text('🐱 猫')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _selectedSpecies = value;
-                                      _updatePrompt();
-                                    });
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
+          ),
+          AppSpacing.vGapLG,
+          Card(
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('宠物信息', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  AppSpacing.vGapMD,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedSpecies,
+                          decoration: const InputDecoration(labelText: '物种', isDense: true),
+                          isExpanded: true,
+                          items: const [
+                            DropdownMenuItem(value: '犬', child: Text('犬')),
+                            DropdownMenuItem(value: '猫', child: Text('猫')),
+                          ],
+                          onChanged: (v) { if (v != null) { setState(() { _selectedSpecies = v; _updatePrompt(); }); } },
                         ),
-                        const SizedBox(width: 12),
-                        // 品种输入
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('品种', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              const SizedBox(height: 4),
-                              TextField(
-                                controller: _breedController,
-                                decoration: const InputDecoration(
-                                  hintText: '例如：柯基',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                                  isDense: true,
-                                ),
-                                onChanged: (_) {
-                                  setState(() {
-                                    _updatePrompt();
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
+                      ),
+                      AppSpacing.hGapMD,
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _breedController,
+                          decoration: const InputDecoration(labelText: '品种', hintText: '例如：柯基', isDense: true),
+                          onChanged: (_) => setState(() => _updatePrompt()),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            AppSpacing.vGapLG,
-
-            // 选择图片按钮
-            ElevatedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('选择图片'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-              ),
-            ),
+          ),
+          AppSpacing.vGapLG,
+          FilledButton.icon(onPressed: _pickImage, icon: const Icon(Icons.upload_file), label: const Text('选择图片')),
             AppSpacing.vGapLG,
 
             // 图片预览和姿势选择
@@ -535,8 +478,7 @@ class _ImageToVideoToolState extends State<ImageToVideoTool> {
                 ),
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -46,11 +46,7 @@ class KlingAPI:
             "nbf": int(time.time()) - 5  # 开始生效的时间：当前时间-5秒
         }
 
-        # 调试信息
-        print(f"🔐 生成JWT Token:")
-        print(f"   iss (access_key): {self.access_key[:10] if self.access_key else 'EMPTY'}...")
-        print(f"   secret_key: {self.secret_key[:10] if self.secret_key else 'EMPTY'}...")
-
+        # 生成 JWT Token（减少日志输出，避免日志过多）
         token = jwt.encode(payload, self.secret_key, headers=headers)
         return token
 
@@ -152,13 +148,25 @@ class KlingAPI:
             elif 'status' in task_data:
                 status = task_data['status']
 
-            print(f"  查询 #{retry_count}: 状态={status}")
+            # 统一转换为小写进行比较（处理大小写不一致问题，如 SUCCEED vs succeed）
+            status_lower = status.lower() if status else None
 
-            # 检查是否完成
-            if status in ['succeed', 'completed', 'success']:
+            print(f"  查询 #{retry_count}: 状态={status} (原始值)")
+
+            # 检查是否完成（不区分大小写）
+            if status_lower in ['succeed', 'completed', 'success', 'done', 'finished']:
+                print(f"  ✅ 任务成功完成: {status}")
                 return task_data
-            elif status in ['failed', 'error']:
-                error_msg = task_data.get('message', '未知错误')
+            elif status_lower in ['failed', 'error', 'failure']:
+                # 获取错误信息（可能来自多个字段）
+                error_msg = (
+                    task_data.get('data', {}).get('message') or
+                    task_data.get('message') or
+                    task_data.get('data', {}).get('error') or
+                    task_data.get('error') or
+                    '未知错误'
+                )
+                print(f"  ❌ 任务失败: status={status}, message={error_msg}")
                 raise Exception(f"任务失败: {error_msg}")
 
             # 等待后继续轮询
@@ -273,10 +281,10 @@ class KlingAPI:
         video_url = f"{self.base_url}/v1/videos/image2video"
         headers = self._get_auth_headers()
 
-        # 调试：打印当前使用的密钥信息
+        # 调试：打印当前使用的密钥信息（只显示部分，保护安全）
         print(f"  🔑 视频API调试信息:")
-        print(f"     Access Key: {self.access_key}")
-        print(f"     Secret Key: {self.secret_key}")
+        print(f"     Access Key: {self.access_key[:8]}..." if self.access_key else "     Access Key: 未设置")
+        print(f"     Secret Key: {self.secret_key[:8]}..." if self.secret_key else "     Secret Key: 未设置")
         print(f"     API URL: {video_url}")
 
         payload = {
@@ -370,13 +378,25 @@ class KlingAPI:
             elif 'status' in task_data:
                 status = task_data['status']
 
-            print(f"  查询 #{retry_count}: 状态={status}")
+            # 统一转换为小写进行比较（处理大小写不一致问题，如 SUCCEED vs succeed）
+            status_lower = status.lower() if status else None
 
-            # 检查是否完成
-            if status in ['succeed', 'completed', 'success']:
+            print(f"  查询 #{retry_count}: 状态={status} (原始值)")
+
+            # 检查是否完成（不区分大小写）
+            if status_lower in ['succeed', 'completed', 'success', 'done', 'finished']:
+                print(f"  ✅ 任务成功完成: {status}")
                 return task_data
-            elif status in ['failed', 'error']:
-                error_msg = task_data.get('message', '未知错误')
+            elif status_lower in ['failed', 'error', 'failure']:
+                # 获取错误信息（可能来自多个字段）
+                error_msg = (
+                    task_data.get('data', {}).get('message') or
+                    task_data.get('message') or
+                    task_data.get('data', {}).get('error') or
+                    task_data.get('error') or
+                    '未知错误'
+                )
+                print(f"  ❌ 任务失败: status={status}, message={error_msg}")
                 raise Exception(f"任务失败: {error_msg}")
 
             # 等待后继续轮询

@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/kling_tools_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 图片生成图片工具（图生图）
@@ -196,37 +197,22 @@ class _GenerateSittingPoseToolState extends State<GenerateSittingPoseTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('🎨 图片生成图片'),
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明
-            Card(
-              color: Colors.purple.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Text(
-                  '上传一张图片，使用可灵AI根据提示词生成新图片（图生图）',
-                  style: TextStyle(color: Colors.purple.shade700),
-                ),
-              ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('图片生成图片')),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.tertiaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Text('上传一张图片，使用可灵AI根据提示词生成新图片（图生图）', style: TextStyle(color: theme.colorScheme.onTertiaryContainer)),
             ),
-            AppSpacing.vGapLG,
-
-            // 选择图片按钮
-            ElevatedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('选择图片'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-              ),
-            ),
+          ),
+          AppSpacing.vGapLG,
+          FilledButton.icon(onPressed: _pickImage, icon: const Icon(Icons.upload_file), label: const Text('选择图片')),
             AppSpacing.vGapLG,
 
             // 图片预览
@@ -379,8 +365,7 @@ class _GenerateSittingPoseToolState extends State<GenerateSittingPoseTool> {
                 ),
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/app_scaffold.dart';
 import 'tools/background_removal_tool.dart';
 import 'tools/generate_sitting_pose_tool.dart';
 import 'tools/image_to_video_tool.dart';
@@ -26,172 +27,170 @@ class ToolsScreen extends StatelessWidget {
     // 根据列数决定是否使用紧凑布局
     final isCompact = crossAxisCount == 1;
 
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(
-        title: const Text('🛠️ 工具中心'),
+        title: const Text('工具中心'),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明卡片
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingLG,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700),
-                        AppSpacing.hGapSM,
-                        Text(
-                          '工具说明',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade700,
-                          ),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 说明卡片
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: AppSpacing.paddingLG,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                      AppSpacing.hGapSM,
+                      Text(
+                        '工具说明',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
                         ),
-                      ],
-                    ),
-                    AppSpacing.vGapMD,
-                    const Text('这里集成了所有常用的独立工具，每个工具都可以单独使用。'),
-                    const Text('涵盖从图片处理到视频生成的完整流程！'),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  AppSpacing.vGapMD,
+                  const Text('这里集成了所有常用的独立工具，每个工具都可以单独使用。'),
+                  const Text('涵盖从图片处理到视频生成的完整流程！'),
+                ],
               ),
             ),
-            AppSpacing.vGapLG,
+          ),
+          AppSpacing.vGapLG,
 
-            // 响应式网格布局
-            GridView.count(
-              crossAxisCount: crossAxisCount,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: isCompact ? 3.5 : 0.80,
-              children: [
-                _buildToolCard(
-                  context,
-                  title: '去除背景',
-                  description: '使用AI自动去除图片背景',
-                  icon: Icons.content_cut,
-                  color: Colors.red,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const BackgroundRemovalTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '图片生成图片',
-                  description: '上传图片，根据提示词生成新图片（图生图）',
-                  icon: Icons.image,
-                  color: Colors.purple,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const GenerateSittingPoseTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '图片生成视频',
-                  description: '上传一张图片，使用可灵AI生成视频',
-                  icon: Icons.video_library,
-                  color: Colors.orange,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ImageToVideoTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '提取视频首尾帧',
-                  description: '从视频中提取第一帧和最后一帧图片',
-                  icon: Icons.image_outlined,
-                  color: Colors.green,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FrameExtractionTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '首尾帧生成视频',
-                  description: '上传首帧和尾帧图片，生成过渡视频',
-                  icon: Icons.video_call,
-                  color: Colors.blue,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const FramesToVideoTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '视频转GIF',
-                  description: '将视频文件转换为GIF动画',
-                  icon: Icons.gif,
-                  color: Colors.pink,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const VideoToGifTool(),
-                      ),
-                    );
-                  },
-                ),
-                _buildToolCard(
-                  context,
-                  title: '模型测试中心',
-                  description: '测试可灵AI各模型的首尾帧支持情况',
-                  icon: Icons.science,
-                  color: Colors.teal,
-                  isCompact: isCompact,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ModelTestScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
+          // 响应式网格布局
+          GridView.count(
+            crossAxisCount: crossAxisCount,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: isCompact ? 3.5 : 0.80,
+            children: [
+              _buildToolCard(
+                context,
+                title: '去除背景',
+                description: '使用AI自动去除图片背景',
+                icon: Icons.content_cut,
+                color: Colors.red,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BackgroundRemovalTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '图片生成图片',
+                description: '上传图片，根据提示词生成新图片（图生图）',
+                icon: Icons.image,
+                color: Colors.purple,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const GenerateSittingPoseTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '图片生成视频',
+                description: '上传一张图片，使用可灵AI生成视频',
+                icon: Icons.video_library,
+                color: Colors.orange,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ImageToVideoTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '提取视频首尾帧',
+                description: '从视频中提取第一帧和最后一帧图片',
+                icon: Icons.image_outlined,
+                color: Colors.green,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FrameExtractionTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '首尾帧生成视频',
+                description: '上传首帧和尾帧图片，生成过渡视频',
+                icon: Icons.video_call,
+                color: Colors.blue,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FramesToVideoTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '视频转GIF',
+                description: '将视频文件转换为GIF动画',
+                icon: Icons.gif,
+                color: Colors.pink,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const VideoToGifTool(),
+                    ),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                title: '模型测试中心',
+                description: '测试可灵AI各模型的首尾帧支持情况',
+                icon: Icons.science,
+                color: Colors.teal,
+                isCompact: isCompact,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ModelTestScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

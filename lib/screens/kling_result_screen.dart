@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../services/kling_generation_service.dart';
+import '../widgets/app_scaffold.dart';
+import '../widgets/app_states.dart';
 
 class KlingResultScreen extends StatefulWidget {
   final String petId;
@@ -40,7 +42,7 @@ class _KlingResultScreenState extends State<KlingResultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AppScaffold(
       appBar: AppBar(
         title: const Text('生成结果'),
         actions: [
@@ -50,10 +52,14 @@ class _KlingResultScreenState extends State<KlingResultScreen> {
           ),
         ],
       ),
+      scrollable: true,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoading(message: '加载结果中...')
           : _error != null
-              ? Center(child: Text('错误: $_error'))
+              ? AppError(
+                  message: _error ?? '未知错误',
+                  onRetry: _loadResults,
+                )
               : _buildResultsView(),
     );
   }
@@ -61,31 +67,19 @@ class _KlingResultScreenState extends State<KlingResultScreen> {
   Widget _buildResultsView() {
     if (_results == null) return const SizedBox();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 基本信息
-          _buildInfoCard(),
-          const SizedBox(height: 24),
-
-          // 基准图
-          _buildBaseImagesSection(),
-          const SizedBox(height: 24),
-
-          // 过渡视频
-          _buildTransitionVideosSection(),
-          const SizedBox(height: 24),
-
-          // 循环视频
-          _buildLoopVideosSection(),
-          const SizedBox(height: 24),
-
-          // GIF
-          _buildGifsSection(),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInfoCard(),
+        const SizedBox(height: 24),
+        _buildBaseImagesSection(),
+        const SizedBox(height: 24),
+        _buildTransitionVideosSection(),
+        const SizedBox(height: 24),
+        _buildLoopVideosSection(),
+        const SizedBox(height: 24),
+        _buildGifsSection(),
+      ],
     );
   }
 

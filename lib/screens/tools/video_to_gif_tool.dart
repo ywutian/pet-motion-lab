@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/kling_tools_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 视频转GIF工具
@@ -115,32 +116,26 @@ class _VideoToGifToolState extends State<VideoToGifTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('🎞️ 视频转GIF'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明卡片
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue.shade700),
-                    AppSpacing.hGapSM,
-                    const Expanded(
-                      child: Text('上传一个视频文件，将其转换为GIF动画'),
-                    ),
-                  ],
-                ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('视频转GIF'), centerTitle: true),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                  AppSpacing.hGapSM,
+                  const Expanded(child: Text('上传一个视频文件，将其转换为GIF动画')),
+                ],
               ),
             ),
+          ),
             AppSpacing.vGapLG,
 
             // 转换参数设置
@@ -319,8 +314,7 @@ class _VideoToGifToolState extends State<VideoToGifTool> {
                 ),
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }

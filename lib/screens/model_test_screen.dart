@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/model_test_service.dart';
+import '../widgets/app_states.dart';
+import '../theme/app_spacing.dart';
 
 /// 可灵AI模型测试界面
 /// 用于测试各种模型的可用性和首尾帧支持情况
@@ -180,10 +182,10 @@ class _ModelTestScreenState extends State<ModelTestScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🧪 模型测试中心'),
+        title: const Text('模型测试中心'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -192,43 +194,20 @@ class _ModelTestScreenState extends State<ModelTestScreen>
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadModels,
-            tooltip: '刷新模型列表',
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadModels, tooltip: '刷新模型列表'),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoading(message: '加载模型列表...')
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-                      const SizedBox(height: 16),
-                      Text(_error!, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadModels,
-                        child: const Text('重试'),
-                      ),
-                    ],
-                  ),
-                )
+              ? AppError(message: _error!, onRetry: _loadModels)
               : Column(
                   children: [
-                    // 测试图片选择区
                     _buildImageSelectionCard(theme),
-                    // 模型列表
                     Expanded(
                       child: TabBarView(
                         controller: _tabController,
-                        children: [
-                          _buildVideoModelList(theme),
-                          _buildImageModelList(theme),
-                        ],
+                        children: [_buildVideoModelList(theme), _buildImageModelList(theme)],
                       ),
                     ),
                   ],
@@ -238,49 +217,23 @@ class _ModelTestScreenState extends State<ModelTestScreen>
   
   Widget _buildImageSelectionCard(ThemeData theme) {
     return Card(
-      margin: const EdgeInsets.all(16),
+      margin: AppSpacing.paddingLG,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppSpacing.paddingLG,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '📷 测试图片',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
+            Text('测试图片', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            AppSpacing.vGapMD,
             Row(
               children: [
-                // 首帧图片
-                Expanded(
-                  child: _buildImageSelector(
-                    theme,
-                    '首帧图片',
-                    _testImage,
-                    _pickTestImage,
-                    required: true,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // 尾帧图片
-                Expanded(
-                  child: _buildImageSelector(
-                    theme,
-                    '尾帧图片 (可选)',
-                    _tailImage,
-                    _pickTailImage,
-                    required: false,
-                  ),
-                ),
+                Expanded(child: _buildImageSelector(theme, '首帧图片', _testImage, _pickTestImage, required: true)),
+                AppSpacing.hGapMD,
+                Expanded(child: _buildImageSelector(theme, '尾帧图片 (可选)', _tailImage, _pickTailImage, required: false)),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              '💡 提示: 如果不选择尾帧，测试时会使用首帧作为尾帧（测试循环视频效果）',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
+            AppSpacing.vGapSM,
+            Text('提示: 如果不选择尾帧，测试时会使用首帧作为尾帧（测试循环视频效果）', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
           ],
         ),
       ),

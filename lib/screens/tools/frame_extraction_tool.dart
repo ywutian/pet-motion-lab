@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/video_trimming_service.dart';
 import '../../services/tool_history_service.dart';
 import '../../models/tool_history_item.dart';
+import '../../widgets/app_scaffold.dart';
 import '../../theme/app_spacing.dart';
 
 /// 提取视频首尾帧工具
@@ -148,37 +149,22 @@ class _FrameExtractionToolState extends State<FrameExtractionTool> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('📸 提取视频首尾帧'),
-      ),
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLG,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 说明
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingMD,
-                child: Text(
-                  '从视频中提取第一帧和最后一帧，自动保存到相册',
-                  style: TextStyle(color: Colors.blue.shade700),
-                ),
-              ),
+    final theme = Theme.of(context);
+    return AppScaffold(
+      appBar: AppBar(title: const Text('提取视频首尾帧')),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+            child: Padding(
+              padding: AppSpacing.paddingMD,
+              child: Text('从视频中提取第一帧和最后一帧，自动保存到相册', style: TextStyle(color: theme.colorScheme.onPrimaryContainer)),
             ),
-            AppSpacing.vGapLG,
-
-            // 选择视频按钮
-            ElevatedButton.icon(
-              onPressed: _pickVideo,
-              icon: const Icon(Icons.video_library),
-              label: const Text('选择视频'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-              ),
-            ),
+          ),
+          AppSpacing.vGapLG,
+          FilledButton.icon(onPressed: _pickVideo, icon: const Icon(Icons.video_library), label: const Text('选择视频')),
             AppSpacing.vGapLG,
 
             // 视频信息
@@ -247,8 +233,7 @@ class _FrameExtractionToolState extends State<FrameExtractionTool> {
                 ],
               ),
             ],
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/kling_generation_service.dart';
 import '../config/api_config.dart';
+import '../widgets/app_states.dart';
+import '../theme/app_spacing.dart';
 
 class KlingHistoryDetailScreen extends StatefulWidget {
   final String petId;
@@ -73,27 +75,19 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
           children: [
             Text(_detail?['breed'] ?? '详情'),
             if (videoModel.isNotEmpty)
-              Text(
-                '🎬 $videoModel ($videoMode)',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-              ),
+              Text('$videoModel ($videoMode)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
           ],
         ),
         actions: [
-          // AI 检测报告按钮
           if (_detail?['ai_check_result'] != null)
-            IconButton(
-              icon: const Icon(Icons.analytics),
-              tooltip: 'AI 检测报告',
-              onPressed: _showAICheckReport,
-            ),
+            IconButton(icon: const Icon(Icons.analytics), tooltip: 'AI 检测报告', onPressed: _showAICheckReport),
           PopupMenuButton<String>(
             icon: const Icon(Icons.download),
             onSelected: _downloadZip,
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'gifs', child: Text('📦 下载所有GIF')),
-              const PopupMenuItem(value: 'videos', child: Text('📦 下载所有视频')),
-              const PopupMenuItem(value: 'all', child: Text('📦 下载全部文件')),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'gifs', child: Text('下载所有GIF')),
+              PopupMenuItem(value: 'videos', child: Text('下载所有视频')),
+              PopupMenuItem(value: 'all', child: Text('下载全部文件')),
             ],
           ),
         ],
@@ -107,7 +101,11 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
           ],
         ),
       ),
-      body: _buildBody(),
+      body: _isLoading
+          ? const AppLoading(message: '加载详情...')
+          : _error != null
+              ? AppError(message: _error!, onRetry: _loadDetail)
+              : _buildBody(),
     );
   }
 
@@ -448,27 +446,7 @@ class _KlingHistoryDetailScreenState extends State<KlingHistoryDetailScreen>
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('加载失败: $_error'),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadDetail, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
-
     final files = _detail?['files'] ?? {};
-
     return TabBarView(
       controller: _tabController,
       children: [

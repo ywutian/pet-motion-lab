@@ -5,6 +5,7 @@ import 'package:animate_do/animate_do.dart';
 import 'dart:io';
 import '../providers/task_provider.dart';
 import '../models/task_model.dart';
+import '../widgets/app_states.dart';
 import 'task_detail_screen.dart';
 import '../utils/responsive.dart';
 
@@ -16,37 +17,15 @@ class HistoryScreen extends StatelessWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          const SliverAppBar.large(
-            title: Text('📊 历史记录'),
-          ),
+          const SliverAppBar.large(title: Text('历史记录')),
           Consumer<TaskProvider>(
             builder: (context, provider, child) {
               if (provider.isLoading) {
-                return const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                );
+                return const SliverFillRemaining(child: AppLoading(message: '加载历史记录...'));
               }
 
               if (provider.tasks.isEmpty) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.history,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          '暂无历史记录',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+                return const SliverFillRemaining(child: AppEmpty(title: '暂无历史记录', subtitle: '完成生成任务后会在这里显示'));
               }
 
               final horizontal = Responsive.horizontalPadding(context).left;

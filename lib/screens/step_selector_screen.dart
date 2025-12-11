@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/app_scaffold.dart';
 import '../theme/app_spacing.dart';
 import 'kling_steps/step_init_screen_refactored.dart';
 import 'kling_steps/step1_remove_background_screen.dart';
@@ -193,278 +194,114 @@ class _StepSelectorScreenState extends State<StepSelectorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('选择步骤'),
-        centerTitle: true,
+    return AppScaffold(
+      appBar: AppBar(title: const Text('选择步骤'), centerTitle: true),
+      scrollable: true,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildInfoCard(theme),
+          AppSpacing.vGapLG,
+          _buildPetInfoCard(theme),
+          AppSpacing.vGapLG,
+          _buildUploadCard(theme),
+          AppSpacing.vGapLG,
+          Text('选择要进入的步骤', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 0, title: '初始化', description: '上传宠物图片，填写信息', icon: Icons.upload_file, color: theme.colorScheme.tertiary, needsPetId: false),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 1, title: '去除背景', description: '使用AI去除图片背景', icon: Icons.content_cut, color: Colors.red, needsPetId: false),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 2, title: '生成基础坐姿图片', description: '使用可灵AI生成标准坐姿', icon: Icons.image, color: Colors.orange, needsPetId: true, needsUpload: true, uploadLabel: '需要上传去背景图片'),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 3, title: '生成初始过渡视频', description: '生成3个初始过渡视频', icon: Icons.video_library, color: Colors.green, needsPetId: true, needsUpload: true, uploadLabel: '需要上传坐姿图片'),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 4, title: '生成剩余过渡视频', description: '生成9个剩余过渡视频', icon: Icons.video_collection, color: Colors.blue, needsPetId: true),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 5, title: '生成循环视频', description: '生成4个循环视频', icon: Icons.loop, color: Colors.indigo, needsPetId: true),
+          AppSpacing.vGapMD,
+          _buildStepCard(stepNumber: 6, title: '转换为GIF', description: '将所有视频转换为GIF', icon: Icons.gif, color: Colors.pink, needsPetId: true),
+        ],
       ),
-      body: SingleChildScrollView(
+    );
+  }
+
+  Widget _buildInfoCard(ThemeData theme) {
+    return Card(
+      color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+      child: Padding(
         padding: AppSpacing.paddingLG,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 说明卡片
-            Card(
-              color: Colors.blue.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingLG,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700),
-                        AppSpacing.hGapSM,
-                        Text(
-                          '使用说明',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    AppSpacing.vGapMD,
-                    const Text('• 步骤0-1：不需要Pet ID，可以直接进入'),
-                    const Text('• 步骤2-6：需要Pet ID（从步骤0获取）'),
-                    const Text('• 步骤2-3：需要上传对应的图片'),
-                    const Text('• 填写信息后，点击对应步骤卡片即可跳转'),
-                  ],
-                ),
-              ),
-            ),
-            AppSpacing.vGapLG,
+            Row(children: [
+              Icon(Icons.info_outline, color: theme.colorScheme.primary),
+              AppSpacing.hGapSM,
+              Text('使用说明', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+            ]),
+            AppSpacing.vGapSM,
+            const Text('• 步骤0-1：不需要Pet ID，可以直接进入'),
+            const Text('• 步骤2-6：需要Pet ID（从步骤0获取）'),
+            const Text('• 步骤2-3：需要上传对应的图片'),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // 宠物信息输入
-            Card(
-              child: Padding(
-                padding: AppSpacing.paddingLG,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '宠物信息',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    AppSpacing.vGapMD,
-
-                    // Pet ID（可选）
-                    TextField(
-                      controller: _petIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'Pet ID（步骤2-6需要）',
-                        hintText: '例如：pet_1234567890',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.fingerprint),
-                      ),
-                    ),
-                    AppSpacing.vGapMD,
-
-                    // 物种选择
-                    DropdownButtonFormField<String>(
-                      value: _species,
-                      decoration: const InputDecoration(
-                        labelText: '物种',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.pets),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: '猫', child: Text('猫')),
-                        DropdownMenuItem(value: '狗', child: Text('狗')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _species = value);
-                        }
-                      },
-                    ),
-                    AppSpacing.vGapMD,
-
-                    // 品种
-                    TextField(
-                      controller: _breedController,
-                      decoration: const InputDecoration(
-                        labelText: '品种',
-                        hintText: '例如：布偶猫',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.category),
-                      ),
-                    ),
-                    AppSpacing.vGapMD,
-
-                    // 颜色
-                    TextField(
-                      controller: _colorController,
-                      decoration: const InputDecoration(
-                        labelText: '颜色',
-                        hintText: '例如：蓝色',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.palette),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            AppSpacing.vGapLG,
-
-            // 上传图片区域
-            Card(
-              color: Colors.orange.shade50,
-              child: Padding(
-                padding: AppSpacing.paddingLG,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.upload_file, color: Colors.orange.shade700),
-                        AppSpacing.hGapSM,
-                        Text(
-                          '上传图片（可选）',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    AppSpacing.vGapMD,
-                    const Text('如果你已经有处理好的图片，可以直接上传：'),
-                    AppSpacing.vGapMD,
-
-                    // 步骤2上传按钮
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _pickImageForStep(2),
-                            icon: const Icon(Icons.image),
-                            label: Text(
-                              _uploadedImageForStep2 == null
-                                  ? '上传去背景图片（步骤2用）'
-                                  : '✅ 已选择',
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.orange.shade700,
-                              side: BorderSide(color: Colors.orange.shade700),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    AppSpacing.vGapSM,
-
-                    // 步骤3上传按钮
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _pickImageForStep(3),
-                            icon: const Icon(Icons.image),
-                            label: Text(
-                              _uploadedImageForStep3 == null
-                                  ? '上传坐姿图片（步骤3用）'
-                                  : '✅ 已选择',
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.green.shade700,
-                              side: BorderSide(color: Colors.green.shade700),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            AppSpacing.vGapLG,
-
-            // 步骤列表
-            Text(
-              '选择要进入的步骤',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+  Widget _buildPetInfoCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: AppSpacing.paddingLG,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('宠物信息', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            AppSpacing.vGapMD,
+            TextField(controller: _petIdController, decoration: const InputDecoration(labelText: 'Pet ID（步骤2-6需要）', hintText: '例如：pet_1234567890', prefixIcon: Icon(Icons.fingerprint))),
+            AppSpacing.vGapMD,
+            DropdownButtonFormField<String>(
+              value: _species,
+              decoration: const InputDecoration(labelText: '物种', prefixIcon: Icon(Icons.pets)),
+              items: const [DropdownMenuItem(value: '猫', child: Text('猫')), DropdownMenuItem(value: '狗', child: Text('狗'))],
+              onChanged: (v) { if (v != null) setState(() => _species = v); },
             ),
             AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 0,
-              title: '初始化',
-              description: '上传宠物图片，填写信息',
-              icon: Icons.upload_file,
-              color: Colors.purple,
-              needsPetId: false,
-            ),
+            TextField(controller: _breedController, decoration: const InputDecoration(labelText: '品种', hintText: '例如：布偶猫', prefixIcon: Icon(Icons.category))),
             AppSpacing.vGapMD,
+            TextField(controller: _colorController, decoration: const InputDecoration(labelText: '颜色', hintText: '例如：蓝色', prefixIcon: Icon(Icons.palette))),
+          ],
+        ),
+      ),
+    );
+  }
 
-            _buildStepCard(
-              stepNumber: 1,
-              title: '去除背景',
-              description: '使用AI去除图片背景',
-              icon: Icons.content_cut,
-              color: Colors.red,
-              needsPetId: false,
-            ),
+  Widget _buildUploadCard(ThemeData theme) {
+    return Card(
+      color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
+      child: Padding(
+        padding: AppSpacing.paddingLG,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.upload_file, color: theme.colorScheme.secondary),
+              AppSpacing.hGapSM,
+              Text('上传图片（可选）', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary)),
+            ]),
+            AppSpacing.vGapSM,
+            const Text('如果你已经有处理好的图片，可以直接上传：'),
             AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 2,
-              title: '生成基础坐姿图片',
-              description: '使用可灵AI生成标准坐姿',
-              icon: Icons.image,
-              color: Colors.orange,
-              needsPetId: true,
-              needsUpload: true,
-              uploadLabel: '需要上传去背景图片',
+            OutlinedButton.icon(
+              onPressed: () => _pickImageForStep(2),
+              icon: const Icon(Icons.image),
+              label: Text(_uploadedImageForStep2 == null ? '上传去背景图片（步骤2用）' : '✅ 已选择'),
             ),
-            AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 3,
-              title: '生成初始过渡视频',
-              description: '生成3个初始过渡视频',
-              icon: Icons.video_library,
-              color: Colors.green,
-              needsPetId: true,
-              needsUpload: true,
-              uploadLabel: '需要上传坐姿图片',
-            ),
-            AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 4,
-              title: '生成剩余过渡视频',
-              description: '生成9个剩余过渡视频',
-              icon: Icons.video_collection,
-              color: Colors.blue,
-              needsPetId: true,
-            ),
-            AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 5,
-              title: '生成循环视频',
-              description: '生成4个循环视频',
-              icon: Icons.loop,
-              color: Colors.indigo,
-              needsPetId: true,
-            ),
-            AppSpacing.vGapMD,
-
-            _buildStepCard(
-              stepNumber: 6,
-              title: '转换为GIF',
-              description: '将所有视频转换为GIF',
-              icon: Icons.gif,
-              color: Colors.pink,
-              needsPetId: true,
+            AppSpacing.vGapSM,
+            OutlinedButton.icon(
+              onPressed: () => _pickImageForStep(3),
+              icon: const Icon(Icons.image),
+              label: Text(_uploadedImageForStep3 == null ? '上传坐姿图片（步骤3用）' : '✅ 已选择'),
             ),
           ],
         ),
@@ -482,105 +319,52 @@ class _StepSelectorScreenState extends State<StepSelectorScreen> {
     bool needsUpload = false,
     String? uploadLabel,
   }) {
+    final theme = Theme.of(context);
     return Card(
-      elevation: 2,
       child: InkWell(
         onTap: () => _goToStep(stepNumber),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppSpacing.borderRadiusLG,
         child: Padding(
-          padding: AppSpacing.paddingLG,
+          padding: AppSpacing.paddingMD,
           child: Row(
             children: [
-              // 步骤图标
               Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 30),
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: AppSpacing.borderRadiusMD),
+                child: Icon(icon, color: color, size: 26),
               ),
               AppSpacing.hGapMD,
-
-              // 步骤信息
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          '步骤$stepNumber',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    Row(children: [
+                      Text('步骤$stepNumber', style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                      if (needsPetId) ...[
+                        AppSpacing.hGapSM,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: theme.colorScheme.tertiaryContainer, borderRadius: BorderRadius.circular(4)),
+                          child: Text('需要Pet ID', style: TextStyle(fontSize: 10, color: theme.colorScheme.onTertiaryContainer, fontWeight: FontWeight.bold)),
                         ),
-                        if (needsPetId) ...[
-                          AppSpacing.hGapSM,
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '需要Pet ID',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.orange.shade700,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    // 上传提示
+                    ]),
+                    AppSpacing.vGapXS,
+                    Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(description, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
                     if (needsUpload && uploadLabel != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.upload, size: 14, color: Colors.blue.shade700),
-                          const SizedBox(width: 4),
-                          Text(
-                            uploadLabel,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.blue.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
+                      AppSpacing.vGapXS,
+                      Row(children: [
+                        Icon(Icons.upload, size: 14, color: theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Text(uploadLabel, style: TextStyle(fontSize: 11, color: theme.colorScheme.primary, fontWeight: FontWeight.w500)),
+                      ]),
                     ],
                   ],
                 ),
               ),
-
-              // 箭头
-              Icon(Icons.arrow_forward_ios, color: color, size: 20),
+              Icon(Icons.arrow_forward_ios, color: color, size: 18),
             ],
           ),
         ),

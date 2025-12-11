@@ -134,7 +134,8 @@ class Database:
                 cursor.execute(f'''
                     UPDATE generation_history SET {set_clause} WHERE pet_id = ?
                 ''', values)
-            return cursor.rowcount > 0
+                affected = cursor.rowcount  # 在 with 语句内保存 rowcount
+            return affected > 0
         except Exception as e:
             print(f"❌ 更新任务失败: {e}")
             return False
@@ -195,12 +196,12 @@ class Database:
         if 'results' in d and d['results']:
             try:
                 d['results'] = json.loads(d['results'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 d['results'] = {}
         if 'metadata' in d and d['metadata']:
             try:
                 d['metadata'] = json.loads(d['metadata'])
-            except:
+            except (json.JSONDecodeError, TypeError):
                 d['metadata'] = {}
         return d
 

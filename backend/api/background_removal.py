@@ -14,8 +14,8 @@ import requests
 
 router = APIRouter(prefix="/api/background", tags=["background"])
 
-# Remove.bg API 配置
-REMOVE_BG_API_KEY = os.getenv("REMOVE_BG_API_KEY", "u7do7iuW3gtQjSg2Qx93RiWH")
+# Remove.bg API 配置（从环境变量读取，不要硬编码密钥！）
+REMOVE_BG_API_KEY = os.getenv("REMOVE_BG_API_KEY", "")
 REMOVE_BG_API_URL = "https://api.remove.bg/v1.0/removebg"
 
 if not REMOVE_BG_API_KEY or REMOVE_BG_API_KEY == "your_api_key_here":

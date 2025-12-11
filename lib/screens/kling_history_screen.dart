@@ -3,6 +3,9 @@ import 'package:animate_do/animate_do.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/kling_generation_service.dart';
 import '../config/api_config.dart';
+import '../widgets/app_scaffold.dart';
+import '../widgets/app_states.dart';
+import '../theme/app_spacing.dart';
 import 'kling_history_detail_screen.dart';
 
 class KlingHistoryScreen extends StatefulWidget {
@@ -129,10 +132,10 @@ class _KlingHistoryScreenState extends State<KlingHistoryScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
-    return Scaffold(
+
+    return AppScaffold(
       appBar: AppBar(
-        title: const Text('🎬 可灵生成历史'),
+        title: const Text('可灵生成历史'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -220,44 +223,55 @@ class _KlingHistoryScreenState extends State<KlingHistoryScreen>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 筛选状态提示
-          if (_modelFilter.isNotEmpty || _statusFilter.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-              child: Row(
-                children: [
-                  const Icon(Icons.filter_alt, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    '筛选: ${_modelFilter.isNotEmpty ? _getModelDisplayName(_modelFilter) : ""}${_modelFilter.isNotEmpty && _statusFilter.isNotEmpty ? " · " : ""}${_statusFilter.isNotEmpty ? _getStatusText(_statusFilter) : ""}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _modelFilter = '';
-                        _statusFilter = '';
-                      });
-                      _loadHistory();
-                    },
-                    icon: const Icon(Icons.clear, size: 16),
-                    label: const Text('清除'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          // 主体内容
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
+      padding: EdgeInsets.symmetric(
+        horizontal: ResponsiveSpacing.getResponsivePadding(context),
+        vertical: AppSpacing.lg,
+      ),
+      body: _isLoading
+          ? const AppLoading(message: '加载历史记录...')
+          : _error != null
+              ? AppError(
+                  message: _error ?? '加载失败',
+                  onRetry: _loadHistory,
+                )
+              : Column(
+                  children: [
+                    // 筛选状态提示
+                    if (_modelFilter.isNotEmpty || _statusFilter.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.filter_alt, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              '筛选: ${_modelFilter.isNotEmpty ? _getModelDisplayName(_modelFilter) : ""}${_modelFilter.isNotEmpty && _statusFilter.isNotEmpty ? " · " : ""}${_statusFilter.isNotEmpty ? _getStatusText(_statusFilter) : ""}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _modelFilter = '';
+                                  _statusFilter = '';
+                                });
+                                _loadHistory();
+                              },
+                              icon: const Icon(Icons.clear, size: 16),
+                              label: const Text('清除'),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // 主体内容
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
                 _buildAllHistoryTab(),
                 _buildComparisonTab(),
               ],
@@ -310,7 +324,7 @@ class _KlingHistoryScreenState extends State<KlingHistoryScreen>
 
   Widget _buildAllHistoryTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoading(message: '加载历史记录...');
     }
 
     if (_error != null) {
@@ -368,7 +382,7 @@ class _KlingHistoryScreenState extends State<KlingHistoryScreen>
 
   Widget _buildComparisonTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoading(message: '加载对比记录...');
     }
 
     if (_error != null) {
